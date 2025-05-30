@@ -10,6 +10,7 @@ import { colors } from '@ui/DesignTokens'
 export class GameScene extends Phaser.Scene {
   private plane!: PaperPlane
   private rings!: Phaser.Physics.Arcade.Group
+  private mountains!: Phaser.Physics.Arcade.StaticGroup
   private score: number = 0
   private distance: number = 0
   private isLaunched: boolean = false
@@ -19,7 +20,9 @@ export class GameScene extends Phaser.Scene {
   private chargingStartTime: number = 0
   private gameEnded: boolean = false
   private groundLevel: number = 0 // Track ground level
-
+  private lastGroundX: number = 0 // Track last ground position for dynamic extension
+  private lastBackgroundX: number = 0 // Track last background position for dynamic extension
+  
   // UI elements
   private scoreText!: Phaser.GameObjects.Text
   private distanceText!: Phaser.GameObjects.Text
@@ -33,9 +36,6 @@ export class GameScene extends Phaser.Scene {
    * Initialize scene - reset all values
    */
   public init(): void {
-    // Kill all existing tweens to prevent flickering rings on restart
-    this.tweens.killAll()
-    
     // Reset all game state
     this.score = 0
     this.distance = 0
@@ -64,17 +64,26 @@ export class GameScene extends Phaser.Scene {
    */
   private setupBackground(): void {
     const { width, height } = this.cameras.main
+    
+    // Create initial background for a few screens
+    this.lastBackgroundX = width * 3
+    this.createBackground(0, this.lastBackgroundX, height)
+  }
+
+  /**
+   * Create background gradient for specified range
+   */
+  private createBackground(startX: number, endX: number, height: number): void {
     const graphics = this.add.graphics()
     
-    // Create background across the entire extended game world (width * 8)
+    // Create background across the specified range
     graphics.fillGradientStyle(
       parseInt(colors.skyTop.replace('#', ''), 16),
       parseInt(colors.skyTop.replace('#', ''), 16),
       parseInt(colors.skyBottom.replace('#', ''), 16),
       parseInt(colors.skyBottom.replace('#', ''), 16)
     )
-    // Fill the entire extended world, not just the initial camera view
-    graphics.fillRect(0, 0, width * 8, height)
+    graphics.fillRect(startX, 0, endX - startX, height)
   }
 
   /**
@@ -84,15 +93,25 @@ export class GameScene extends Phaser.Scene {
     const { width, height } = this.cameras.main
     this.groundLevel = height - 60 // Ground collision boundary is 60px from bottom
     
-    // Create ground tiles across a large area (extended range)
-    // Position ground tiles to align with the collision boundary
-    for (let x = 0; x < width * 8; x += 100) { // Extended to 8x width
+    // Create initial ground tiles (only for the first few screens)
+    this.lastGroundX = 0
+    this.extendGround(width * 3) // Create initial ground for 3 screen widths
+  }
+
+  /**
+   * Extend ground tiles to the specified x position
+   */
+  private extendGround(targetX: number): void {
+    const { height } = this.cameras.main
+    
+    // Create ground tiles from lastGroundX to targetX
+    for (let x = this.lastGroundX; x < targetX; x += 100) {
       const groundTile = this.add.image(x, this.groundLevel, 'ground')
       groundTile.setOrigin(0, 0) // Ground starts at groundLevel
       groundTile.setScale(1, 1)
       
-      // Add ground variety every few tiles
-      if (Math.random() < 0.3) {
+      // Add ground variety every few tiles (only before mountains start at 800m)
+      if (x < 8000 && Math.random() < 0.3) { // 8000px = 800m
         // Add trees - position them to sit ON the ground (groundLevel)
         const treeHeight = 40 + Math.random() * 30
         const tree = this.add.rectangle(
@@ -112,8 +131,8 @@ export class GameScene extends Phaser.Scene {
         )
       }
       
-      // Add rocks occasionally - position them ON the ground
-      if (Math.random() < 0.2) {
+      // Add rocks occasionally - position them ON the ground (only before mountains)
+      if (x < 8000 && Math.random() < 0.2) {
         const rockWidth = 15 + Math.random() * 10
         const rockHeight = 8 + Math.random() * 6
         const rock = this.add.ellipse(
@@ -125,8 +144,8 @@ export class GameScene extends Phaser.Scene {
         )
       }
       
-      // Add grass patches - position them just above the ground
-      if (Math.random() < 0.4) {
+      // Add grass patches - position them just above the ground (only before mountains)
+      if (x < 8000 && Math.random() < 0.4) {
         for (let g = 0; g < 3 + Math.random() * 3; g++) {
           const grassHeight = 4 + Math.random() * 4
           const grass = this.add.rectangle(
@@ -139,6 +158,8 @@ export class GameScene extends Phaser.Scene {
         }
       }
     }
+    
+    this.lastGroundX = targetX
   }
 
   /**
@@ -147,13 +168,14 @@ export class GameScene extends Phaser.Scene {
   private setupPhysics(): void {
     // Create paper plane on the ground - make sure it's visible and properly sized
     const { width, height } = this.cameras.main
+    
     this.plane = new PaperPlane(this, width * 0.15, this.groundLevel - 25)
     
     // Reset crash state for fresh start
     this.plane.resetCrash()
     
-    // Set initial camera bounds (extended for longer flights)
-    this.cameras.main.setBounds(0, 0, width * 8, height)
+    // Set initial camera bounds - will be extended dynamically as plane progresses
+    this.cameras.main.setBounds(0, 0, width * 2, height)
 
     // Create rings group
     this.rings = this.physics.add.group({
@@ -161,8 +183,12 @@ export class GameScene extends Phaser.Scene {
       runChildUpdate: true
     })
 
+    // Create mountains group for obstacles
+    this.mountains = this.physics.add.staticGroup()
+
     // Setup collision detection
     this.physics.add.overlap(this.plane, this.rings, this.collectRing, undefined, this)
+    this.physics.add.overlap(this.plane, this.mountains, this.hitMountain, undefined, this)
   }
 
   /**
@@ -224,6 +250,7 @@ export class GameScene extends Phaser.Scene {
       color: colors.primary
     })
     this.scoreText.setScrollFactor(0) // Keep fixed to camera
+    this.scoreText.setDepth(1000) // Ensure it's always on top
 
     // Distance display
     this.distanceText = this.add.text(20, 50, 'Distance: 0m', {
@@ -232,6 +259,7 @@ export class GameScene extends Phaser.Scene {
       color: colors.primary
     })
     this.distanceText.setScrollFactor(0) // Keep fixed to camera
+    this.distanceText.setDepth(1000) // Ensure it's always on top
 
     // Launch indicator
     this.launchIndicator = this.add.graphics()
@@ -246,6 +274,7 @@ export class GameScene extends Phaser.Scene {
     })
     instructions.setOrigin(0.5, 1)
     instructions.setScrollFactor(0)
+    instructions.setDepth(1000) // Ensure instructions are also on top
     
     // Hide instructions after launch
     this.time.delayedCall(5000, () => {
@@ -268,7 +297,7 @@ export class GameScene extends Phaser.Scene {
       const x = width + i * 200 + Math.random() * 150 // More spread out
       const y = this.groundLevel - 80 - Math.random() * 300 // 80-380px above ground
       
-      // Use random ring type based on rarity
+      // Use random ring type based on rarity - keeping this random for gameplay variety
       const ring = new Ring(this, x, y)
       this.rings.add(ring)
     }
@@ -344,6 +373,15 @@ export class GameScene extends Phaser.Scene {
   }
 
   /**
+   * Handle mountain collision - game over
+   */
+  private hitMountain(_plane: any, _mountain: any): void {
+    if (!this.gameEnded) {
+      this.endGame()
+    }
+  }
+
+  /**
    * Update game state
    */
   public update(_time: number, delta: number): void {
@@ -363,6 +401,29 @@ export class GameScene extends Phaser.Scene {
       if (this.plane.x > 0) {
         this.distance = Math.max(this.distance, this.plane.x / 10) // Convert to meters
       }
+
+      // Dynamically extend camera bounds as plane progresses
+      const currentBounds = this.cameras.main.getBounds()
+      if (this.plane.x > currentBounds.width - this.cameras.main.width * 2) {
+        // Extend bounds by 2 screen widths when plane gets close to the edge
+        const newWidth = this.plane.x + this.cameras.main.width * 3
+        this.cameras.main.setBounds(0, 0, newWidth, currentBounds.height)
+      }
+
+      // Dynamically extend background as plane progresses
+      if (this.plane.x > this.lastBackgroundX - this.cameras.main.width * 2) {
+        const targetX = this.plane.x + this.cameras.main.width * 3
+        this.createBackground(this.lastBackgroundX, targetX, this.cameras.main.height)
+        this.lastBackgroundX = targetX
+      }
+
+      // Dynamically extend ground as plane progresses
+      if (this.plane.x > this.lastGroundX - this.cameras.main.width * 2) {
+        this.extendGround(this.plane.x + this.cameras.main.width * 3)
+      }
+
+      // Spawn mountains starting from 800m (8000px)
+      this.spawnMountains()
 
       // Check for crash - only if game hasn't ended
       if (this.plane.hasCrashed() && !this.gameEnded) {
@@ -478,11 +539,111 @@ export class GameScene extends Phaser.Scene {
   }
 
   /**
+   * Spawn mountain obstacles starting from 800m with progressive difficulty
+   */
+  private spawnMountains(): void {
+    const planeX = this.plane.x
+    
+    // Only spawn mountains after 800m (8000px)
+    if (planeX < 7500) return // Start spawning when approaching 800m
+    
+    // Check if we need more mountains ahead
+    const mountainsAhead = this.mountains.children.entries.filter(mountain => 
+      (mountain as any).x > planeX + 500
+    ).length
+
+    if (mountainsAhead < 2) {
+      // Calculate difficulty based on distance (progressive difficulty)
+      const distanceInKm = (planeX / 10) / 1000 // Convert to kilometers
+      const difficulty = Math.min(distanceInKm - 0.8, 3) // Start at 0.8km, max difficulty at 3.8km
+      
+      // Spawn mountain ahead of plane
+      const spawnX = planeX + 600 + Math.random() * 400
+      
+      // Different mountain patterns based on difficulty
+      if (difficulty < 0.5) {
+        // Easy: Single small mountain
+        this.createMountain(spawnX, 80 + Math.random() * 40, 120 + Math.random() * 60)
+      } else if (difficulty < 1.5) {
+        // Medium: Larger mountain or double mountain
+        if (Math.random() < 0.6) {
+          this.createMountain(spawnX, 120 + Math.random() * 60, 150 + Math.random() * 80)
+        } else {
+          // Double mountain
+          this.createMountain(spawnX, 100 + Math.random() * 40, 100 + Math.random() * 40)
+          this.createMountain(spawnX + 200 + Math.random() * 100, 80 + Math.random() * 40, 120 + Math.random() * 40)
+        }
+      } else {
+        // Hard: Complex mountain ranges
+        const mountainCount = 2 + Math.floor(Math.random() * 3) // 2-4 mountains
+        for (let i = 0; i < mountainCount; i++) {
+          const x = spawnX + i * (100 + Math.random() * 80)
+          const height = 60 + Math.random() * 120
+          const width = 80 + Math.random() * 100
+          this.createMountain(x, height, width)
+        }
+      }
+    }
+  }
+
+  /**
+   * Create a triangular mountain obstacle
+   */
+  private createMountain(x: number, height: number, width: number): void {
+    // Create triangular mountain graphic
+    const mountain = this.add.graphics()
+    mountain.fillStyle(0x8B4513) // Brown color for mountains
+    mountain.beginPath()
+    mountain.moveTo(x - width/2, this.groundLevel) // Bottom left
+    mountain.lineTo(x + width/2, this.groundLevel) // Bottom right
+    mountain.lineTo(x, this.groundLevel - height) // Top peak
+    mountain.closePath()
+    mountain.fillPath()
+    
+    // Add snow cap for taller mountains
+    if (height > 100) {
+      mountain.fillStyle(0xFFFFFF)
+      const snowHeight = height * 0.3
+      mountain.beginPath()
+      mountain.moveTo(x - width/6, this.groundLevel - height + snowHeight)
+      mountain.lineTo(x + width/6, this.groundLevel - height + snowHeight)
+      mountain.lineTo(x, this.groundLevel - height)
+      mountain.closePath()
+      mountain.fillPath()
+    }
+    
+    // Create physics body for collision
+    const mountainBody = this.add.zone(x, this.groundLevel - height/2, width, height)
+    this.physics.add.existing(mountainBody, true) // true = static body
+    mountainBody.setData('type', 'mountain')
+    
+    // Add to mountains group
+    this.mountains.add(mountainBody)
+    
+    // Set depth so mountains appear behind plane but above ground
+    mountain.setDepth(5)
+  }
+
+  /**
    * Update UI elements - removed stamina bar
    */
   private updateUI(): void {
-    this.scoreText.setText(`Score: ${this.score}`)
-    this.distanceText.setText(`Distance: ${Math.floor(this.distance)}m`)
+    // Ensure UI elements exist and are visible
+    if (this.scoreText && this.scoreText.active) {
+      this.scoreText.setText(`Score: ${this.score}`)
+      this.scoreText.setVisible(true)
+      this.scoreText.setAlpha(1)
+      // Ensure position stays fixed to top-left
+      this.scoreText.setPosition(20, 20)
+    }
+    
+    if (this.distanceText && this.distanceText.active) {
+      this.distanceText.setText(`Distance: ${Math.floor(this.distance)}m`)
+      this.distanceText.setVisible(true)
+      this.distanceText.setAlpha(1)
+      // Ensure position stays fixed to top-left
+      this.distanceText.setPosition(20, 50)
+    }
     
     // Stamina bar removed - no longer needed in Sonic-style system
   }
@@ -585,9 +746,24 @@ export class GameScene extends Phaser.Scene {
     
     // Enable restart on click - add delay to prevent immediate restart
     this.time.delayedCall(1000, () => {
-      this.input.once('pointerdown', () => {
-        this.scene.restart()
-      })
+      console.log('Restart functionality enabled')
+      
+      // CRITICAL FIX: Instead of scene.restart(), use window.location.reload()
+      // This mimics the fresh page load behavior that works perfectly
+      const restartGame = () => {
+        console.log('Restarting game via page reload...')
+        window.location.reload()
+      }
+      
+      // Mouse/touch restart
+      this.input.once('pointerdown', restartGame)
+      
+      // Keyboard restart (R key)
+      if (this.input.keyboard) {
+        this.input.keyboard.once('keydown-R', restartGame)
+        this.input.keyboard.once('keydown-SPACE', restartGame)
+        this.input.keyboard.once('keydown-ENTER', restartGame)
+      }
     })
     
     console.log(`Game Over! Score: ${finalScore}, Distance: ${Math.floor(this.distance)}m`)

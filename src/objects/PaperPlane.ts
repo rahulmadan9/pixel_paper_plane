@@ -17,6 +17,7 @@ export class PaperPlane extends Phaser.Physics.Arcade.Sprite {
   ) {
     // Try to use the sprite asset, fallback to generated texture if not available
     const textureKey = scene.textures.exists('plane') ? 'plane' : 'plane-fallback'
+    
     super(scene, x, y, textureKey)
     
     // Add to scene and enable physics
@@ -28,26 +29,12 @@ export class PaperPlane extends Phaser.Physics.Arcade.Sprite {
     body.setCollideWorldBounds(false)
     body.setGravityY(800) // Strong downward gravity like Flappy Bird
     
-    // Set collision area to match sprite (assuming 50x30 texture before scaling)
-    // The setScale call will then scale this body down with the sprite.
-    body.setSize(50, 50) 
+    // Set visual properties
+    this.setOrigin(0.5, 0.5)
+    this.setScale(0.06) // Scale to 6% of original size for Flappy Bird feel
     
-    // Dynamically set scale so plane never exceeds 10% of screen area
-    const cam = scene.cameras.main;
-    const maxArea = cam.width * cam.height * 0.10;
-    const planeArea = 50 * 30; // Texture size
-    let scale = Math.sqrt(maxArea / planeArea);
-    // Clamp scale to a reasonable range
-    scale = Math.max(0.5, Math.min(scale, 2));
-    
-    // Reduce to 2.5% of current size
-    scale = scale * 0.03;
-    
-    this.setScale(scale);
-    this.setOrigin(0.5, 0.5);
-    
-    // Make sure plane is visible
-    this.setDepth(10) // Render above background
+    // Set depth to render above rings and ground
+    this.setDepth(10)
   }
 
   /**

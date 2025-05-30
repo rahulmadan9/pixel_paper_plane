@@ -48,7 +48,7 @@ export class Ring extends Phaser.Physics.Arcade.Sprite {
       textureKey = config.spriteKey + '-fallback'
     }
     
-    // Create sprite with the appropriate ring asset or fallback
+    // Create sprite with the appropriate ring asset or fallback texture
     super(scene, x, y, textureKey)
     
     this.ringType = selectedRingType
@@ -58,35 +58,49 @@ export class Ring extends Phaser.Physics.Arcade.Sprite {
     scene.add.existing(this)
     scene.physics.add.existing(this)
     
-    // Configure physics body
+    // Set appropriate scale for the ring (smaller than plane)
+    this.setScale(0.04) // Smaller scale for collectible rings
+    
+    // Set depth to ensure proper rendering order
+    this.setDepth(5) // In front of background, behind UI
+    
+    // Configure physics body for ring collection
     const body = this.body as Phaser.Physics.Arcade.Body
-    body.setCircle(this.ringRadius)
-    body.setImmovable(true)
+    if (body) {
+      // Set circular collision area based on visual size
+      const radius = this.ringRadius * this.scaleX
+      body.setCircle(radius)
+    }
     
-    // Set visual properties
-    this.setOrigin(0.5, 0.5)
-    this.setScale(0.04) // Reduced to 5% of current size (was 0.8)
-    
-    // Set depth to render above background but below plane
-    this.setDepth(5)
-    
-    // Add continuous rotation animation and store reference
-    this.rotationTween = scene.tweens.add({
-      targets: this,
-      rotation: Math.PI * 2,
-      duration: 2000,
-      repeat: -1,
-      ease: 'none'
-    })
-    
-    // Add subtle floating animation and store reference
-    this.floatingTween = scene.tweens.add({
+    // Add floating animation with slight rotation
+    this.startFloatingAnimation()
+    this.startRotationAnimation()
+  }
+
+  /**
+   * Start floating animation for the ring
+   */
+  private startFloatingAnimation(): void {
+    this.floatingTween = this.scene.tweens.add({
       targets: this,
       y: this.y - 5,
       duration: 1500,
       yoyo: true,
       repeat: -1,
       ease: 'Sine.easeInOut'
+    })
+  }
+
+  /**
+   * Start rotation animation for the ring
+   */
+  private startRotationAnimation(): void {
+    this.rotationTween = this.scene.tweens.add({
+      targets: this,
+      rotation: Math.PI * 2,
+      duration: 2000,
+      repeat: -1,
+      ease: 'none'
     })
   }
 
