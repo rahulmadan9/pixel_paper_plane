@@ -1,7 +1,7 @@
 import Phaser from 'phaser'
 
 /**
- * Ring types for different point values and rarity
+ * Ring Types - Different point values and rarity levels
  */
 export enum RingType {
   BRONZE = 'bronze',
@@ -10,77 +10,83 @@ export enum RingType {
 }
 
 /**
- * Ring configuration for different types
+ * Ring configuration for each type
  */
 interface RingConfig {
   points: number
   spriteKey: string
-  rarity: number // Lower number = rarer (0-1)
+  rarity: number // Spawn probability (0-1)
 }
 
 const RING_CONFIGS: Record<RingType, RingConfig> = {
   [RingType.BRONZE]: { points: 20, spriteKey: 'ringBronze', rarity: 0.7 },   // 70% chance
   [RingType.SILVER]: { points: 50, spriteKey: 'ringSilver', rarity: 0.25 },  // 25% chance
-  [RingType.GOLD]: { points: 100, spriteKey: 'ringGold', rarity: 0.05 }     // 5% chance
+  [RingType.GOLD]: { points: 100, spriteKey: 'ringGold', rarity: 0.05 }      // 5% chance
 }
 
 /**
- * SonicRing - Collectible rings inspired by Sonic the Hedgehog
- * Three types: Bronze (20pts), Silver (50pts), Gold (100pts)
- * Disappear when collected and provide points
+ * Ring - Collectible rings that provide points when collected
+ * 
+ * Features:
+ * - Three types: Bronze (20pts), Silver (50pts), Gold (100pts)
+ * - Sonic-style collection animation
+ * - Floating and rotation animations
+ * - Sparkle effects on collection
  */
 export class Ring extends Phaser.Physics.Arcade.Sprite {
-  private ringType: RingType
-  private scoreValue: number
+  private readonly ringType: RingType
+  private readonly scoreValue: number
   private collected: boolean = false
-  private ringRadius: number = 300 // Collision radius should be relative to the original texture size.
   private rotationTween?: Phaser.Tweens.Tween
   private floatingTween?: Phaser.Tweens.Tween
 
   constructor(scene: Phaser.Scene, x: number, y: number, ringType?: RingType) {
-    // Determine ring type (random if not specified)
     const selectedRingType = ringType || Ring.getRandomRingType()
     const config = RING_CONFIGS[selectedRingType]
     
-    // Try to use the sprite asset, fallback to generated texture if not available
-    let textureKey = config.spriteKey
-    if (!scene.textures.exists(config.spriteKey)) {
-      textureKey = config.spriteKey + '-fallback'
-    }
+    // Use sprite asset with fallback to generated texture
+    const textureKey = scene.textures.exists(config.spriteKey) 
+      ? config.spriteKey 
+      : config.spriteKey + '-fallback'
     
-    // Create sprite with the appropriate ring asset or fallback texture
     super(scene, x, y, textureKey)
     
     this.ringType = selectedRingType
     this.scoreValue = config.points
     
-    // Add to scene and enable physics
-    scene.add.existing(this)
-    scene.physics.add.existing(this)
-    
-    // Set appropriate scale for the ring (smaller than plane)
-    this.setScale(0.04) // Smaller scale for collectible rings
-    
-    // Set depth to ensure proper rendering order
-    this.setDepth(5) // In front of background, behind UI
-    
-    // Configure physics body for ring collection
-    const body = this.body as Phaser.Physics.Arcade.Body
-    if (body) {
-      // Set circular collision area based on visual size
-      const radius = this.ringRadius * this.scaleX
-      body.setCircle(radius)
-    }
-    
-    // Add floating animation with slight rotation
-    this.startFloatingAnimation()
-    this.startRotationAnimation()
+    this.setupPhysics()
+    this.setupVisuals()
+    this.startAnimations()
   }
 
   /**
-   * Start floating animation for the ring
+   * Configure physics body for collection
    */
-  private startFloatingAnimation(): void {
+  private setupPhysics(): void {
+    this.scene.add.existing(this)
+    this.scene.physics.add.existing(this)
+    
+    const body = this.body as Phaser.Physics.Arcade.Body
+    if (body) {
+      // Circular collision area
+      const radius = 300 * this.scaleX
+      body.setCircle(radius)
+    }
+  }
+
+  /**
+   * Configure visual properties
+   */
+  private setupVisuals(): void {
+    this.setScale(0.04) // Small scale for collectible rings
+    this.setDepth(5) // Behind plane but above background
+  }
+
+  /**
+   * Start floating and rotation animations
+   */
+  private startAnimations(): void {
+    // Floating animation
     this.floatingTween = this.scene.tweens.add({
       targets: this,
       y: this.y - 5,
@@ -89,12 +95,8 @@ export class Ring extends Phaser.Physics.Arcade.Sprite {
       repeat: -1,
       ease: 'Sine.easeInOut'
     })
-  }
 
-  /**
-   * Start rotation animation for the ring
-   */
-  private startRotationAnimation(): void {
+    // Rotation animation
     this.rotationTween = this.scene.tweens.add({
       targets: this,
       rotation: Math.PI * 2,
@@ -105,12 +107,11 @@ export class Ring extends Phaser.Physics.Arcade.Sprite {
   }
 
   /**
-   * Get a random ring type based on rarity
+   * Get random ring type based on rarity
    */
   private static getRandomRingTypeInternal(): RingType {
     const rand = Math.random()
     
-    // Check from rarest to most common
     if (rand < RING_CONFIGS[RingType.GOLD].rarity) {
       return RingType.GOLD
     } else if (rand < RING_CONFIGS[RingType.GOLD].rarity + RING_CONFIGS[RingType.SILVER].rarity) {
@@ -121,16 +122,12 @@ export class Ring extends Phaser.Physics.Arcade.Sprite {
   }
 
   /**
-   * Collect the ring - Sonic style
-   * @returns Object with score value
+   * Collect the ring - Sonic-style animation and scoring
    */
-  public collect(): { score: number; stamina: number } {
-    if (this.collected) return { score: 0, stamina: 0 }
+  public collect(): { score: number } {
+    if (this.collected) return { score: 0 }
     
     this.collected = true
-    
-    // Play collection sound effect (if available)
-    // this.scene.sound.play('ring_collect')
     
     // Sonic-style collection animation
     this.scene.tweens.add({
@@ -140,37 +137,25 @@ export class Ring extends Phaser.Physics.Arcade.Sprite {
       alpha: 0,
       duration: 150,
       ease: 'Power2',
-      onComplete: () => {
-        this.destroy()
-      }
+      onComplete: () => this.destroy()
     })
 
-    // Create sparkle effect
     this.createSparkleEffect()
     
-    return {
-      score: this.scoreValue,
-      stamina: 0 // No stamina in new system
-    }
+    return { score: this.scoreValue }
   }
 
   /**
-   * Create sparkle effect when ring is collected
+   * Create sparkle effect on collection
    */
   private createSparkleEffect(): void {
-    // Get color based on ring type
-    let sparkleColor = 0xFFD700 // Default gold
-    switch (this.ringType) {
-      case RingType.BRONZE:
-        sparkleColor = 0xCD7F32
-        break
-      case RingType.SILVER:
-        sparkleColor = 0xC0C0C0
-        break
-      case RingType.GOLD:
-        sparkleColor = 0xFFD700
-        break
+    const sparkleColors = {
+      [RingType.BRONZE]: 0xCD7F32,
+      [RingType.SILVER]: 0xC0C0C0,
+      [RingType.GOLD]: 0xFFD700
     }
+    
+    const sparkleColor = sparkleColors[this.ringType]
     
     // Create sparkle particles
     for (let i = 0; i < 6; i++) {
@@ -197,56 +182,38 @@ export class Ring extends Phaser.Physics.Arcade.Sprite {
   }
 
   /**
-   * Check if ring is collected
+   * Public API methods
    */
   public isCollected(): boolean {
     return this.collected
   }
 
-  /**
-   * Get the score value of this ring
-   */
   public getScoreValue(): number {
     return this.scoreValue
   }
 
-  /**
-   * Get the ring type
-   */
   public getRingType(): RingType {
     return this.ringType
   }
 
-  /**
-   * Get stamina restore value (legacy compatibility)
-   */
-  public getStaminaRestore(): number {
-    return 0 // No stamina system in Sonic-style rings
-  }
-
-  /**
-   * Static method to get random ring type for spawning
-   */
   public static getRandomRingType(): RingType {
     return Ring.getRandomRingTypeInternal()
   }
 
   /**
-   * Override destroy method to properly clean up tweens
+   * Clean up animations and destroy
    */
   public destroy(fromScene?: boolean): void {
-    // Clean up tweens to prevent flickering issues during scene restarts
-    if (this.rotationTween && !this.rotationTween.isDestroyed()) {
+    if (this.rotationTween) {
       this.rotationTween.destroy()
       this.rotationTween = undefined
     }
     
-    if (this.floatingTween && !this.floatingTween.isDestroyed()) {
+    if (this.floatingTween) {
       this.floatingTween.destroy()
       this.floatingTween = undefined
     }
     
-    // Call parent destroy
     super.destroy(fromScene)
   }
 } 

@@ -3,7 +3,12 @@ import { colors } from '@ui/DesignTokens'
 
 /**
  * BootScene - Handles initial asset loading with progress bar
- * Loads sprites, sounds, and fonts before starting the game
+ * 
+ * Features:
+ * - Loading screen with progress bar
+ * - Asset loading with fallback generation
+ * - Google Fonts loading
+ * - Error handling for missing assets
  */
 export class BootScene extends Phaser.Scene {
   private loadingBar!: Phaser.GameObjects.Graphics
@@ -13,9 +18,6 @@ export class BootScene extends Phaser.Scene {
     super({ key: 'BootScene' })
   }
 
-  /**
-   * Preload all game assets
-   */
   public preload(): void {
     this.createLoadingScreen()
     this.setupLoadingEvents()
@@ -23,12 +25,20 @@ export class BootScene extends Phaser.Scene {
   }
 
   /**
-   * Create visual loading screen with progress bar
+   * Create visual loading screen
    */
   private createLoadingScreen(): void {
     const { width, height } = this.cameras.main
 
-    // Background gradient
+    this.createBackground(width, height)
+    this.createProgressBar(width, height)
+    this.createLoadingText(width, height)
+  }
+
+  /**
+   * Create gradient background
+   */
+  private createBackground(width: number, height: number): void {
     const graphics = this.add.graphics()
     graphics.fillGradientStyle(
       parseInt(colors.skyTop.replace('#', ''), 16),
@@ -37,7 +47,12 @@ export class BootScene extends Phaser.Scene {
       parseInt(colors.skyBottom.replace('#', ''), 16)
     )
     graphics.fillRect(0, 0, width, height)
+  }
 
+  /**
+   * Create progress bar elements
+   */
+  private createProgressBar(width: number, height: number): void {
     // Progress bar background
     this.progressBox = this.add.graphics()
     this.progressBox.fillStyle(parseInt(colors.uiBg.replace('#', '').slice(0, 3), 16), 0.8)
@@ -45,8 +60,12 @@ export class BootScene extends Phaser.Scene {
 
     // Progress bar fill
     this.loadingBar = this.add.graphics()
+  }
 
-    // Loading text
+  /**
+   * Create loading text
+   */
+  private createLoadingText(width: number, height: number): void {
     this.add.text(width / 2, height / 2 - 50, 'Loading...', {
       fontFamily: 'monospace',
       fontSize: '20px',
@@ -58,63 +77,88 @@ export class BootScene extends Phaser.Scene {
    * Load all game assets
    */
   private loadAssets(): void {
-    // Add error handling for missing assets
+    this.setupAssetErrorHandling()
+    this.loadSpriteAssets()
+    this.createFallbackAssets()
+    this.loadWebFont()
+  }
+
+  /**
+   * Setup error handling for missing assets
+   */
+  private setupAssetErrorHandling(): void {
     this.load.on('loaderror', (file: any) => {
       console.warn(`Failed to load asset: ${file.key} from ${file.url}`)
     })
+  }
 
-    // ✨ Try to load the sprite assets first
-    this.load.image("plane", "assets/sprites/plane_right.png");
-    this.load.image("ringGold", "assets/sprites/ring_gold.png");
-    this.load.image("ringSilver", "assets/sprites/ring_silver.png");
-    this.load.image("ringBronze", "assets/sprites/ring_bronze.png");
+  /**
+   * Load sprite assets
+   */
+  private loadSpriteAssets(): void {
+    // Plane sprite
+    this.load.image('plane', 'assets/sprites/plane_right.png')
     
-    // Create fallback assets in case sprites are missing
-    this.createFallbackAssets()
+    // Ring sprites
+    this.load.image('ringGold', 'assets/sprites/ring_gold.png')
+    this.load.image('ringSilver', 'assets/sprites/ring_silver.png')
+    this.load.image('ringBronze', 'assets/sprites/ring_bronze.png')
     
-    // Load Google Fonts
-    this.load.script('webfont', 'https://ajax.googleapis.com/ajax/libs/webfont/1.6.26/webfont.js')
+    // Cloud sprites
+    this.load.image('cloud1', 'assets/sprites/cloud1.png')
+    this.load.image('cloud2', 'assets/sprites/cloud2.png')
   }
 
   /**
    * Create fallback assets programmatically
    */
   private createFallbackAssets(): void {
-    // Create fallback plane sprite
-    const planeGraphics = this.add.graphics()
-    planeGraphics.fillStyle(0x377DFF) // Primary blue color
-    planeGraphics.beginPath()
-    planeGraphics.moveTo(20, 0)      // nose (pointing right)
-    planeGraphics.lineTo(-10, 12)    // bottom wing
-    planeGraphics.lineTo(-5, 3)      // bottom wing tip
-    planeGraphics.lineTo(-5, -3)     // top wing tip  
-    planeGraphics.lineTo(-10, -12)   // top wing
-    planeGraphics.lineTo(20, 0)      // back to nose
-    planeGraphics.closePath()
-    planeGraphics.fillPath()
-    
-    // Add white details
-    planeGraphics.lineStyle(2, 0xFFFFFF)
-    planeGraphics.beginPath()
-    planeGraphics.moveTo(20, 0)
-    planeGraphics.lineTo(-8, 0)
-    planeGraphics.strokePath()
-    
-    // Generate fallback plane texture
-    planeGraphics.generateTexture('plane-fallback', 50, 30)
-    planeGraphics.destroy()
-
-    // Create fallback ring textures
-    this.createFallbackRing('ringBronze-fallback', 0xCD7F32) // Bronze
-    this.createFallbackRing('ringSilver-fallback', 0xC0C0C0) // Silver  
-    this.createFallbackRing('ringGold-fallback', 0xFFD700)   // Gold
-    
-    // Create ground texture
+    this.createFallbackPlane()
+    this.createFallbackRings()
+    this.createFallbackClouds()
     this.createGroundTexture()
   }
 
   /**
-   * Create a fallback ring texture
+   * Create fallback plane sprite
+   */
+  private createFallbackPlane(): void {
+    const graphics = this.add.graphics()
+    graphics.fillStyle(0x377DFF)
+    
+    // Draw plane shape
+    graphics.beginPath()
+    graphics.moveTo(20, 0)      // nose (pointing right)
+    graphics.lineTo(-10, 12)    // bottom wing
+    graphics.lineTo(-5, 3)      // bottom wing tip
+    graphics.lineTo(-5, -3)     // top wing tip  
+    graphics.lineTo(-10, -12)   // top wing
+    graphics.lineTo(20, 0)      // back to nose
+    graphics.closePath()
+    graphics.fillPath()
+    
+    // Add white centerline
+    graphics.lineStyle(2, 0xFFFFFF)
+    graphics.beginPath()
+    graphics.moveTo(20, 0)
+    graphics.lineTo(-8, 0)
+    graphics.strokePath()
+    
+    graphics.generateTexture('plane-fallback', 50, 30)
+    graphics.destroy()
+  }
+
+  /**
+   * Create fallback ring textures
+   */
+  private createFallbackRings(): void {
+    this.createFallbackRing('ringBronze-fallback', 0xCD7F32)
+    this.createFallbackRing('ringSilver-fallback', 0xC0C0C0)
+    this.createFallbackRing('ringGold-fallback', 0xFFD700)
+  }
+
+  /**
+   * Create individual fallback ring
    */
   private createFallbackRing(key: string, color: number): void {
     const graphics = this.add.graphics()
@@ -131,9 +175,72 @@ export class BootScene extends Phaser.Scene {
     graphics.lineStyle(2, 0x000000, 0.4)
     graphics.strokeCircle(0, 0, 8)
     
-    // Generate texture
     graphics.generateTexture(key, 32, 32)
     graphics.destroy()
+  }
+
+  /**
+   * Create fallback cloud textures
+   */
+  private createFallbackClouds(): void {
+    this.createFallbackCloud('cloud1-fallback', 'small')
+    this.createFallbackCloud('cloud2-fallback', 'wide')
+    this.createFallbackCloud('cloud-fallback', 'small') // Generic fallback
+  }
+
+  /**
+   * Create individual fallback cloud
+   */
+  private createFallbackCloud(key: string, variant: 'small' | 'wide'): void {
+    const graphics = this.add.graphics()
+    graphics.fillStyle(0xFFFFFF, 0.8)
+    
+    if (variant === 'small') {
+      this.drawSmallCloud(graphics)
+      graphics.generateTexture(key, 80, 50)
+    } else {
+      this.drawWideCloud(graphics)
+      graphics.generateTexture(key, 100, 40)
+    }
+    
+    graphics.destroy()
+  }
+
+  /**
+   * Draw small puffy cloud shape
+   */
+  private drawSmallCloud(graphics: Phaser.GameObjects.Graphics): void {
+    graphics.beginPath()
+    // Main body
+    graphics.arc(40, 30, 18, 0, Math.PI * 2)
+    // Left puff
+    graphics.arc(25, 25, 12, 0, Math.PI * 2)
+    // Right puff  
+    graphics.arc(55, 25, 12, 0, Math.PI * 2)
+    // Top puff
+    graphics.arc(40, 15, 10, 0, Math.PI * 2)
+    // Bottom extensions
+    graphics.arc(35, 35, 8, 0, Math.PI * 2)
+    graphics.arc(45, 35, 8, 0, Math.PI * 2)
+    graphics.fill()
+  }
+
+  /**
+   * Draw wide flat cloud shape
+   */
+  private drawWideCloud(graphics: Phaser.GameObjects.Graphics): void {
+    graphics.beginPath()
+    // Main body
+    graphics.arc(50, 25, 20, 0, Math.PI * 2)
+    // Left section
+    graphics.arc(25, 25, 15, 0, Math.PI * 2)
+    // Right section
+    graphics.arc(75, 25, 15, 0, Math.PI * 2)
+    // Top bumps
+    graphics.arc(35, 15, 8, 0, Math.PI * 2)
+    graphics.arc(50, 12, 10, 0, Math.PI * 2)
+    graphics.arc(65, 15, 8, 0, Math.PI * 2)
+    graphics.fill()
   }
 
   /**
@@ -142,63 +249,83 @@ export class BootScene extends Phaser.Scene {
   private createGroundTexture(): void {
     const graphics = this.add.graphics()
     
-    // Draw ground pattern
-    graphics.fillStyle(0x4A5D23) // Dark green for ground
-    graphics.fillRect(0, 0, 100, 50)
+    // Draw ground pattern with dirt texture
+    graphics.fillStyle(0x8B4513) // Brown dirt
+    graphics.fillRect(0, 0, 100, 60)
     
-    // Add some texture dots
-    graphics.fillStyle(0x5D7129) // Lighter green dots
-    for (let i = 0; i < 20; i++) {
-      const x = Math.random() * 100
-      const y = Math.random() * 50
-      graphics.fillCircle(x, y, 2)
+    // Add texture lines
+    graphics.lineStyle(1, 0x654321, 0.6)
+    for (let i = 0; i < 8; i++) {
+      graphics.beginPath()
+      graphics.moveTo(Math.random() * 100, Math.random() * 60)
+      graphics.lineTo(Math.random() * 100, Math.random() * 60)
+      graphics.strokePath()
     }
     
-    // Generate texture
-    graphics.generateTexture('ground', 100, 50)
+    // Add small stones
+    graphics.fillStyle(0x696969, 0.8)
+    for (let i = 0; i < 5; i++) {
+      const x = Math.random() * 100
+      const y = Math.random() * 60
+      graphics.fillCircle(x, y, 1 + Math.random() * 2)
+    }
+    
+    graphics.generateTexture('ground', 100, 60)
     graphics.destroy()
+  }
+
+  /**
+   * Load Google Fonts
+   */
+  private loadWebFont(): void {
+    this.load.script('webfont', 'https://ajax.googleapis.com/ajax/libs/webfont/1.6.26/webfont.js')
   }
 
   /**
    * Setup loading progress events
    */
   private setupLoadingEvents(): void {
-    this.load.on('progress', (value: number) => {
-      this.loadingBar.clear()
-      this.loadingBar.fillStyle(parseInt(colors.primary.replace('#', ''), 16))
-      this.loadingBar.fillRect(
-        this.cameras.main.width / 2 - 150,
-        this.cameras.main.height / 2 - 15,
-        300 * value,
-        30
-      )
+    this.load.on('progress', (progress: number) => {
+      this.updateProgressBar(progress)
     })
 
     this.load.on('complete', () => {
-      this.loadingBar.destroy()
-      this.progressBox.destroy()
-      this.loadWebFont()
+      this.handleLoadComplete()
     })
+  }
+
+  /**
+   * Update progress bar visual
+   */
+  private updateProgressBar(progress: number): void {
+    this.loadingBar.clear()
+    this.loadingBar.fillStyle(parseInt(colors.primary.replace('#', ''), 16))
+    this.loadingBar.fillRect(
+      this.cameras.main.width / 2 - 150,
+      this.cameras.main.height / 2 - 15,
+      300 * progress,
+      30
+    )
+  }
+
+  /**
+   * Handle loading completion
+   */
+  private handleLoadComplete(): void {
+    this.loadWebFontAndStart()
   }
 
   /**
    * Load web font and start game
    */
-  private loadWebFont(): void {
-    const WebFont = (window as any).WebFont
-    
-    if (WebFont) {
-      WebFont.load({
+  private loadWebFontAndStart(): void {
+    if (typeof (window as any).WebFont !== 'undefined') {
+      (window as any).WebFont.load({
         google: {
           families: ['Press Start 2P']
         },
-        active: () => {
-          this.startGame()
-        },
-        inactive: () => {
-          // Fallback if font fails to load
-          this.startGame()
-        }
+        active: () => this.startGame(),
+        inactive: () => this.startGame() // Start anyway if font fails
       })
     } else {
       this.startGame()
@@ -206,9 +333,11 @@ export class BootScene extends Phaser.Scene {
   }
 
   /**
-   * Start the main game
+   * Start the main game scene
    */
   private startGame(): void {
-    this.scene.start('GameScene')
+    this.time.delayedCall(500, () => {
+      this.scene.start('GameScene')
+    })
   }
 } 

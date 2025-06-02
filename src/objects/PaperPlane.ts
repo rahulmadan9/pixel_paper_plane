@@ -2,167 +2,172 @@ import Phaser from 'phaser'
 
 /**
  * PaperPlane - The main player-controlled aircraft
- * Simple Flappy Bird-style physics with gravity and tap-to-flap mechanics
+ * 
+ * Implements Flappy Bird-style physics:
+ * - Constant forward movement
+ * - Gravity pulls the plane down
+ * - Tapping provides upward impulse (flapping)
+ * - Rotation based on vertical velocity
  */
 export class PaperPlane extends Phaser.Physics.Arcade.Sprite {
-  private flapForce: number = 350 // Upward impulse when flapping
-  private forwardSpeed: number = 200 // Constant forward movement speed
-  private hasCrashedFlag: boolean = false // Track crash state
-  private maxRotation: number = Math.PI / 3 // Maximum rotation (60 degrees)
+  // Physics constants
+  private readonly flapForce: number = 350
+  private readonly forwardSpeed: number = 200
+  private readonly maxRotation: number = Math.PI / 3 // 60 degrees
 
-  constructor(
-    scene: Phaser.Scene,
-    x: number,
-    y: number
-  ) {
-    // Try to use the sprite asset, fallback to generated texture if not available
+  // State tracking
+  private hasCrashedFlag: boolean = false
+
+  constructor(scene: Phaser.Scene, x: number, y: number) {
+    // Use sprite asset with fallback to generated texture
     const textureKey = scene.textures.exists('plane') ? 'plane' : 'plane-fallback'
-    
     super(scene, x, y, textureKey)
     
-    // Add to scene and enable physics
-    scene.add.existing(this)
-    scene.physics.add.existing(this)
+    this.setupPhysics()
+    this.setupVisuals()
+  }
+
+  /**
+   * Configure physics properties
+   */
+  private setupPhysics(): void {
+    this.scene.add.existing(this)
+    this.scene.physics.add.existing(this)
     
-    // Configure physics body
     const body = this.body as Phaser.Physics.Arcade.Body
     body.setCollideWorldBounds(false)
-    body.setGravityY(800) // Strong downward gravity like Flappy Bird
-    
-    // Set visual properties
+    body.setGravityY(800) // Strong downward gravity
+  }
+
+  /**
+   * Configure visual properties
+   */
+  private setupVisuals(): void {
     this.setOrigin(0.5, 0.5)
-    this.setScale(0.06) // Scale to 6% of original size for Flappy Bird feel
-    
-    // Set depth to render above rings and ground
-    this.setDepth(10)
+    this.setScale(0.06) // Small scale for Flappy Bird feel
+    this.setDepth(10) // Render above rings and ground
   }
 
   /**
    * Launch the plane with initial velocity
-   * @param angle Launch angle in radians
-   * @param power Launch power (0-1)
    */
   public launch(angle: number, power: number): void {
     const body = this.body as Phaser.Physics.Arcade.Body
     
-    // Set initial forward speed and vertical velocity based on launch
-    const baseSpeed = this.forwardSpeed
-    const maxVerticalSpeed = 400
-    
-    // Apply forward momentum and vertical component
-    const velocityX = baseSpeed + (power * 100) // Boost forward speed based on power
-    const velocityY = Math.sin(angle) * power * maxVerticalSpeed // Vertical component
+    // Calculate launch velocities
+    const velocityX = this.forwardSpeed + (power * 150)
+    const velocityY = Math.sin(angle) * power * 800
     
     body.setVelocity(velocityX, velocityY)
     
-    // Set initial rotation based on launch angle, but constrained
+    // Set initial rotation (constrained)
     const constrainedAngle = Math.max(-this.maxRotation, Math.min(this.maxRotation, angle))
     this.setRotation(constrainedAngle)
   }
 
   /**
-   * Flap - gives upward impulse (Flappy Bird style)
+   * Apply upward impulse (Flappy Bird-style flap)
    */
   public flap(): void {
     if (this.hasCrashedFlag) return
     
     const body = this.body as Phaser.Physics.Arcade.Body
-    
-    // Give upward impulse (negative Y velocity)
     body.setVelocityY(-this.flapForce)
   }
 
   /**
-   * Update plane physics - Flappy Bird style
-   * @param deltaTime Time step in seconds
+   * Update plane physics and rotation each frame
    */
-  public updatePhysics(deltaTime: number): void {
-    // Don't update physics if crashed
+  public updatePhysics(_deltaTime: number): void {
     if (this.hasCrashedFlag) return
     
     const body = this.body as Phaser.Physics.Arcade.Body
     
-    // Maintain constant forward speed (rightward movement)
+    // Maintain constant forward speed
     body.setVelocityX(this.forwardSpeed)
     
-    // Simple rotation based on vertical velocity (Flappy Bird style)
-    const verticalVelocity = body.velocity.y
-    
-    // Calculate rotation based on vertical velocity
-    // Positive Y velocity (falling) = nose down
-    // Negative Y velocity (rising) = nose up
+    // Update rotation based on vertical velocity
+    this.updateRotation(body.velocity.y)
+  }
+
+  /**
+   * Update plane rotation based on vertical velocity
+   */
+  private updateRotation(verticalVelocity: number): void {
     let targetRotation = 0
     
     if (verticalVelocity < -100) {
-      // Rising fast - nose up
-      targetRotation = -this.maxRotation / 2 // 30 degrees up
+      targetRotation = -this.maxRotation / 2 // Nose up when rising
     } else if (verticalVelocity > 200) {
-      // Falling fast - nose down
-      targetRotation = this.maxRotation / 2 // 30 degrees down
+      targetRotation = this.maxRotation / 2 // Nose down when falling
     } else {
-      // Moderate speed - slight tilt based on velocity
       targetRotation = (verticalVelocity / 400) * this.maxRotation / 2
     }
     
     // Smooth rotation transition
-    const currentRotation = this.rotation
-    const rotationDiff = targetRotation - currentRotation
-    
-    // Apply rotation with smoothing
-    const rotationSpeed = 0.15
-    this.setRotation(currentRotation + rotationDiff * rotationSpeed)
+    const rotationDiff = targetRotation - this.rotation
+    this.setRotation(this.rotation + rotationDiff * 0.15)
   }
 
   /**
-   * Get current distance traveled
-   * @returns Distance from start position
-   */
-  public getDistance(): number {
-    return Math.sqrt(this.x * this.x + this.y * this.y)
-  }
-
-  /**
-   * Check if plane has crashed (hit ground or obstacle)
-   * @returns True if crashed
+   * Check if plane has crashed into ground
    */
   public hasCrashed(): boolean {
     const body = this.body as Phaser.Physics.Arcade.Body
     
-    // Only check for crash if plane has been launched and is moving
-    if (body.velocity.x < 10) return false // Don't crash if not moving
+    // Only check if plane is moving
+    if (body.velocity.x < 10) return false
     
     const scene = this.scene as any
-    // Use actual groundLevel from scene instead of camera height
     const groundLevel = scene.groundLevel || (scene.cameras.main.height - 60)
     
-    // Check if plane hit the ground (plane bottom touches ground)
     const crashed = this.y >= groundLevel
-    
     if (crashed && !this.hasCrashedFlag) {
-      this.crash()
+      this.crashIntoGround()
     }
     
     return crashed
   }
 
   /**
-   * Handle crash - stop all physics and lock plane position
+   * Handle ground collision
    */
-  private crash(): void {
+  private crashIntoGround(): void {
     this.hasCrashedFlag = true
     const body = this.body as Phaser.Physics.Arcade.Body
     
-    // Stop all movement
+    // Stop movement and lock to ground
     body.setVelocity(0, 0)
     body.setAcceleration(0, 0)
     
-    // Lock plane at ground level
     const scene = this.scene as any
     const groundLevel = scene.groundLevel || (scene.cameras.main.height - 60)
     this.y = groundLevel
+    this.setRotation(this.maxRotation / 2) // Nose down
+  }
+
+  /**
+   * Handle cloud collision - different from ground crash
+   */
+  public crashIntoCloud(): void {
+    if (this.hasCrashedFlag) return
     
-    // Set crashed rotation (nose down)
-    this.setRotation(this.maxRotation / 2) // 30 degrees down
+    this.hasCrashedFlag = true
+    const body = this.body as Phaser.Physics.Arcade.Body
+    
+    // Stop movement immediately
+    body.setVelocity(0, 0)
+    body.setAcceleration(0, 0)
+    
+    // Dramatic crash rotation
+    this.setRotation(this.maxRotation)
+  }
+
+  /**
+   * Check if plane has crashed from any source
+   */
+  public hasCrashedFromAnySource(): boolean {
+    return this.hasCrashedFlag
   }
 
   /**
@@ -172,33 +177,10 @@ export class PaperPlane extends Phaser.Physics.Arcade.Sprite {
     this.hasCrashedFlag = false
   }
 
-  // Legacy methods for compatibility - simplified or removed
-
   /**
-   * Legacy method - now calls flap() for compatibility
+   * Get current distance traveled
    */
-  public elevate(deltaTime: number): void {
-    this.flap()
-  }
-
-  /**
-   * Legacy method - no longer needed for Flappy Bird style
-   */
-  public stopElevating(): void {
-    // No longer needed - flapping is instantaneous
-  }
-
-  /**
-   * Legacy method - stamina system removed
-   */
-  public restoreStamina(amount: number): void {
-    // Stamina system removed for simplicity
-  }
-
-  /**
-   * Legacy method - stamina system removed
-   */
-  public getStaminaPercent(): number {
-    return 1.0 // Always full stamina in Flappy Bird style
+  public getDistance(): number {
+    return Math.sqrt(this.x * this.x + this.y * this.y)
   }
 } 

@@ -3,7 +3,7 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
-  "description": "A one-touch glide game featuring a pixel paper plane",
+  "description": "A one-touch Flappy Bird-style game featuring a pixel paper plane",
   "scripts": {
     "dev": "vite",
     "build": "tsc && vite build",
@@ -33,10 +33,7 @@
     "@capacitor/cli": "^7.0.0",
     "@capacitor/core": "^7.0.0",
     "@capacitor/ios": "^7.0.0",
-    "firebase": "^11.8.1",
-    "howler": "^2.2.4",
     "phaser": "^3.90.0",
-    "simplex-noise": "^4.0.3",
     "vite-plugin-pwa": "^0.20.5"
   }
 }

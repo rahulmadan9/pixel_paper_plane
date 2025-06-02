@@ -53,10 +53,8 @@ export default defineConfig({
     alias: {
       '@': path.resolve(__dirname, './src'),
       '@scenes': path.resolve(__dirname, './src/scenes'),
-      '@systems': path.resolve(__dirname, './src/systems'),
       '@objects': path.resolve(__dirname, './src/objects'),
-      '@ui': path.resolve(__dirname, './src/ui'),
-      '@assets': path.resolve(__dirname, './src/assets')
+      '@ui': path.resolve(__dirname, './src/ui')
     }
   },
   build: {
@@ -64,8 +62,7 @@ export default defineConfig({
     rollupOptions: {
       output: {
         manualChunks: {
-          phaser: ['phaser'],
-          firebase: ['firebase/app', 'firebase/auth', 'firebase/firestore']
+          phaser: ['phaser']
         }
       }
     }
