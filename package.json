@@ -33,6 +33,7 @@
     "@capacitor/cli": "^7.0.0",
     "@capacitor/core": "^7.0.0",
     "@capacitor/ios": "^7.0.0",
+    "firebase": "^11.8.1",
     "phaser": "^3.90.0",
     "vite-plugin-pwa": "^0.20.5"
   }

@@ -337,7 +337,7 @@ export class BootScene extends Phaser.Scene {
    */
   private startGame(): void {
     this.time.delayedCall(500, () => {
-      this.scene.start('GameScene')
+      this.scene.start('StartScene')
     })
   }
 } 

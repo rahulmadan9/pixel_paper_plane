@@ -2,7 +2,10 @@ import Phaser from 'phaser'
 import { PaperPlane } from '@objects/PaperPlane'
 import { Ring } from '@objects/Ring'
 import { Cloud } from '@objects/Cloud'
-import { colors } from '@ui/DesignTokens'
+import { colors, typography } from '../ui/DesignTokens'
+import { ScoreManager } from '../systems/ScoreManager'
+import { AuthManager } from '../systems/AuthManager'
+import type { GameScore } from '../systems/ScoreManager'
 
 /**
  * GameScene - Main gameplay scene
@@ -231,7 +234,20 @@ export class GameScene extends Phaser.Scene {
       this.input.keyboard.on('keydown-SPACE', () => this.handleTap())
       this.input.keyboard.on('keydown-R', () => {
         if (this.gameEnded) {
-          this.scene.restart()
+          window.location.reload() //this was the fix for the glitchy restart. IMP: Don't remove this.
+        }
+      })
+      
+      // Additional keyboard shortcuts for game over navigation
+      this.input.keyboard.on('keydown-H', () => {
+        if (this.gameEnded) {
+          this.goToStartScene()
+        }
+      })
+      
+      this.input.keyboard.on('keydown-ENTER', () => {
+        if (this.gameEnded) {
+          window.location.reload() // Restart shortcut
         }
       })
     }
@@ -600,19 +616,29 @@ export class GameScene extends Phaser.Scene {
     if (this.gameEnded) return
     this.gameEnded = true
     
+    // Calculate final score and save it
+    const finalScore = this.score + Math.floor(this.distance)
+    const savedScore = ScoreManager.saveScore(finalScore, Math.floor(this.distance))
+    
+    console.log(`Game ended! Final Score: ${finalScore}, Distance: ${Math.floor(this.distance)}m`)
+    console.log(`Score saved with rank: ${savedScore.rank}`)
+    
     // Stop camera and show game over screen
     this.cameras.main.stopFollow()
     this.cameras.main.setScroll(this.cameras.main.scrollX, this.cameras.main.scrollY)
     
-    this.showGameOverScreen()
+    this.showGameOverScreen(savedScore)
   }
 
   /**
    * Display game over screen with final score
    */
-  private showGameOverScreen(): void {
+  private showGameOverScreen(savedScore: GameScore): void {
     const { width, height } = this.cameras.main
-    const finalScore = this.score + Math.floor(this.distance)
+    const finalScore = savedScore.score
+    const isNewPersonalBest = ScoreManager.isNewPersonalBest(finalScore)
+    const authManager = AuthManager.getInstance()
+    const currentUser = authManager.getCurrentUser()
     
     // Background overlay
     const gameOverBg = this.add.graphics()
@@ -621,8 +647,8 @@ export class GameScene extends Phaser.Scene {
     gameOverBg.setScrollFactor(0)
     
     // Game over text
-    const gameOverText = this.add.text(width / 2, height / 2 - 60, 'GAME OVER', {
-      fontFamily: '"Press Start 2P", monospace',
+    const gameOverText = this.add.text(width / 2, height / 2 - 120, 'GAME OVER', {
+      fontFamily: typography.primary,
       fontSize: '24px',
       color: colors.primary,
       align: 'center'
@@ -630,9 +656,30 @@ export class GameScene extends Phaser.Scene {
     gameOverText.setOrigin(0.5)
     gameOverText.setScrollFactor(0)
     
-    // Score display
-    const scoreText = this.add.text(width / 2, height / 2 - 20, `FINAL SCORE: ${finalScore}`, {
-      fontFamily: '"Press Start 2P", monospace',
+    // Personal best indicator
+    if (isNewPersonalBest) {
+      const newBestText = this.add.text(width / 2, height / 2 - 90, '★ NEW PERSONAL BEST! ★', {
+        fontFamily: typography.primary,
+        fontSize: '14px',
+        color: colors.accent,
+        align: 'center'
+      })
+      newBestText.setOrigin(0.5)
+      newBestText.setScrollFactor(0)
+      
+      // Flashing effect for new best
+      this.tweens.add({
+        targets: newBestText,
+        alpha: 0.3,
+        duration: 600,
+        yoyo: true,
+        repeat: 3
+      })
+    }
+    
+    // Score display with ranking
+    const scoreText = this.add.text(width / 2, height / 2 - 60, `FINAL SCORE: ${finalScore}`, {
+      fontFamily: typography.primary,
       fontSize: '16px',
       color: colors.accent,
       align: 'center'
@@ -640,9 +687,21 @@ export class GameScene extends Phaser.Scene {
     scoreText.setOrigin(0.5)
     scoreText.setScrollFactor(0)
     
+    // Ranking display
+    if (savedScore.rank) {
+      const rankText = this.add.text(width / 2, height / 2 - 35, `Personal Rank: #${savedScore.rank}`, {
+        fontFamily: typography.primary,
+        fontSize: '12px',
+        color: colors.white,
+        align: 'center'
+      })
+      rankText.setOrigin(0.5)
+      rankText.setScrollFactor(0)
+    }
+    
     // Distance display
-    const distanceText = this.add.text(width / 2, height / 2 + 10, `DISTANCE: ${Math.floor(this.distance)}m`, {
-      fontFamily: '"Press Start 2P", monospace',
+    const distanceText = this.add.text(width / 2, height / 2 - 10, `DISTANCE: ${Math.floor(this.distance)}m`, {
+      fontFamily: typography.primary,
       fontSize: '16px',
       color: colors.accent,
       align: 'center'
@@ -650,49 +709,213 @@ export class GameScene extends Phaser.Scene {
     distanceText.setOrigin(0.5)
     distanceText.setScrollFactor(0)
     
-    // Restart text
-    const restartText = this.add.text(width / 2, height / 2 + 50, 'CLICK TO RESTART', {
-      fontFamily: '"Press Start 2P", monospace',
-      fontSize: '14px',
-      color: colors.primary,
+    // Authentication-aware messaging and buttons
+    this.createAuthAwareUI(width, height, currentUser)
+    
+    // Show top 3 personal scores
+    this.showTopPersonalScores(width, height)
+    
+    // Navigation buttons
+    this.createGameOverButtons(width, height, currentUser)
+  }
+  
+  /**
+   * Create authentication-aware UI elements
+   */
+  private createAuthAwareUI(width: number, height: number, currentUser: any): void {
+    let statusMessage = ''
+    let statusColor: string = colors.white
+    
+    if (!currentUser) {
+      statusMessage = 'Guest Mode • Scores saved locally only'
+      statusColor = colors.accent
+    } else if (currentUser.isGuest) {
+      statusMessage = `${currentUser.displayName} • Create account to save scores online!`
+      statusColor = colors.accent
+    } else {
+      statusMessage = `${currentUser.displayName || currentUser.email} • Score saved to your account`
+      statusColor = colors.white
+    }
+    
+    const statusText = this.add.text(width / 2, height / 2 + 15, statusMessage, {
+      fontFamily: typography.primary,
+      fontSize: '10px',
+      color: statusColor,
+      align: 'center',
+      backgroundColor: colors.primary + '40',
+      padding: { x: 8, y: 4 }
+    })
+    statusText.setOrigin(0.5)
+    statusText.setScrollFactor(0)
+  }
+  
+  /**
+   * Create game over navigation buttons
+   */
+  private createGameOverButtons(width: number, height: number, currentUser: any): void {
+    const buttonY = height / 2 + 100
+    const buttonSpacing = 130
+    
+    // HOME button (always visible)
+    const homeButton = this.createGameOverButton(
+      width / 2 - buttonSpacing,
+      buttonY,
+      'HOME',
+      colors.primary,
+      () => this.goToStartScene()
+    )
+    
+    // RESTART button (always visible)
+    const restartButton = this.createGameOverButton(
+      width / 2,
+      buttonY,
+      'RESTART',
+      colors.accent,
+      () => this.restartGame()
+    )
+    
+    // Authentication-aware third button
+    if (!currentUser || currentUser.isGuest) {
+      // LOGIN/CREATE ACCOUNT button for guests
+      const authButtonText = !currentUser ? 'LOGIN' : 'CREATE ACCOUNT'
+      this.createGameOverButton(
+        width / 2 + buttonSpacing,
+        buttonY,
+        authButtonText,
+        '#4CAF50',
+        () => this.goToLogin()
+      )
+    } else {
+      // VIEW SCORES button for authenticated users
+      this.createGameOverButton(
+        width / 2 + buttonSpacing,
+        buttonY,
+        'SCORES',
+        '#666666',
+        () => this.goToScores()
+      )
+    }
+    
+    // Add helper text
+    const helpText = this.add.text(width / 2, height / 2 + 140, 'CLICK ANY BUTTON OR PRESS R/SPACE/ENTER', {
+      fontFamily: typography.primary,
+      fontSize: '9px',
+      color: colors.white,
       align: 'center'
     })
-    restartText.setOrigin(0.5)
-    restartText.setScrollFactor(0)
+    helpText.setOrigin(0.5)
+    helpText.setScrollFactor(0)
+    helpText.setAlpha(0.7)
     
-    // Flashing effect
+    // Flashing effect for buttons
     this.tweens.add({
-      targets: restartText,
-      alpha: 0.3,
-      duration: 800,
+      targets: [homeButton, restartButton],
+      alpha: 0.8,
+      duration: 1000,
       yoyo: true,
       repeat: -1
     })
-    
-    this.setupRestartControls()
-    
-    console.log(`Game Over! Score: ${finalScore}, Distance: ${Math.floor(this.distance)}m`)
   }
-
+  
   /**
-   * Setup restart controls with delay
+   * Create a styled game over button
    */
-  private setupRestartControls(): void {
-    this.time.delayedCall(1000, () => {
-      const restartGame = () => {
-        console.log('Restarting game scene...')
-        this.scene.restart()
-      }
-      
-      // Mouse/touch restart
-      this.input.once('pointerdown', restartGame)
-      
-      // Keyboard restart
-      if (this.input.keyboard) {
-        this.input.keyboard.once('keydown-R', restartGame)
-        this.input.keyboard.once('keydown-SPACE', restartGame)
-        this.input.keyboard.once('keydown-ENTER', restartGame)
-      }
+  private createGameOverButton(x: number, y: number, text: string, color: string, onClick: () => void): Phaser.GameObjects.Container {
+    const buttonContainer = this.add.container(x, y)
+    
+    // Button background
+    const bg = this.add.graphics()
+    bg.fillStyle(parseInt(color.replace('#', ''), 16), 0.9)
+    bg.lineStyle(2, parseInt(colors.white.replace('#', ''), 16), 1)
+    bg.fillRoundedRect(-50, -20, 100, 40, 8)
+    bg.strokeRoundedRect(-50, -20, 100, 40, 8)
+    
+    // Button text
+    const buttonText = this.add.text(0, 0, text, {
+      fontFamily: typography.primary,
+      fontSize: '12px',
+      color: colors.white,
+      align: 'center',
+      stroke: '#000000',
+      strokeThickness: 2
     })
+    buttonText.setOrigin(0.5, 0.5)
+    
+    buttonContainer.add([bg, buttonText])
+    buttonContainer.setSize(100, 40)
+    buttonContainer.setInteractive()
+    buttonContainer.setScrollFactor(0)
+    
+    // Hover effects
+    buttonContainer.on('pointerover', () => {
+      buttonContainer.setScale(1.1)
+    })
+    
+    buttonContainer.on('pointerout', () => {
+      buttonContainer.setScale(1.0)
+    })
+    
+    // Click handler
+    buttonContainer.on('pointerdown', onClick)
+    
+    return buttonContainer
+  }
+  
+  /**
+   * Navigation methods
+   */
+  private goToStartScene(): void {
+    console.log('Navigating to start scene...')
+    this.scene.start('StartScene')
+  }
+  
+  private restartGame(): void {
+    console.log('Restarting game via page reload...')
+    window.location.reload() // Preserve the important restart fix
+  }
+  
+  private goToLogin(): void {
+    console.log('Navigating to login...')
+    // For now, go to start scene where login functionality exists
+    this.scene.start('StartScene')
+  }
+  
+  private goToScores(): void {
+    console.log('Navigating to scores...')
+    this.scene.start('ScoresScene')
+  }
+  
+  /**
+   * Show top 3 personal scores on game over screen
+   */
+  private showTopPersonalScores(width: number, height: number): void {
+    const topScores = ScoreManager.getTopScores(3)
+    
+    if (topScores.length > 0) {
+      const topScoresText = this.add.text(width / 2, height / 2 + 35, 'YOUR TOP SCORES:', {
+        fontFamily: typography.primary,
+        fontSize: '10px',
+        color: colors.white,
+        align: 'center'
+      })
+      topScoresText.setOrigin(0.5)
+      topScoresText.setScrollFactor(0)
+      
+      topScores.forEach((score, index) => {
+        const scoreEntry = this.add.text(
+          width / 2, 
+          height / 2 + 50 + (index * 12), 
+          `${index + 1}. ${score.score} pts (${score.distance}m)`, 
+          {
+            fontFamily: typography.primary,
+            fontSize: '9px',
+            color: colors.accent,
+            align: 'center'
+          }
+        )
+        scoreEntry.setOrigin(0.5)
+        scoreEntry.setScrollFactor(0)
+      })
+    }
   }
 } 
