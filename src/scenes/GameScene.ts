@@ -234,6 +234,8 @@ export class GameScene extends Phaser.Scene {
       this.input.keyboard.on('keydown-SPACE', () => this.handleTap())
       this.input.keyboard.on('keydown-R', () => {
         if (this.gameEnded) {
+          // Set flag to start game directly after reload (skip start screen)
+          localStorage.setItem('startGameDirectly', 'true')
           window.location.reload() //this was the fix for the glitchy restart. IMP: Don't remove this.
         }
       })
@@ -247,6 +249,8 @@ export class GameScene extends Phaser.Scene {
       
       this.input.keyboard.on('keydown-ENTER', () => {
         if (this.gameEnded) {
+          // Set flag to start game directly after reload (skip start screen)
+          localStorage.setItem('startGameDirectly', 'true')
           window.location.reload() // Restart shortcut
         }
       })
@@ -406,7 +410,9 @@ export class GameScene extends Phaser.Scene {
     
     // Check for crash
     if ((this.plane.hasCrashed() || this.plane.hasCrashedFromAnySource()) && !this.gameEnded) {
-      this.endGame()
+      this.endGame().catch(error => {
+        console.warn('Failed to end game properly:', error)
+      })
     }
   }
 
@@ -612,22 +618,32 @@ export class GameScene extends Phaser.Scene {
   /**
    * End the game and show results
    */
-  private endGame(): void {
+  private async endGame(): Promise<void> {
     if (this.gameEnded) return
     this.gameEnded = true
     
     // Calculate final score and save it
     const finalScore = this.score + Math.floor(this.distance)
-    const savedScore = ScoreManager.saveScore(finalScore, Math.floor(this.distance))
+    
+    // Use the sync version for immediate response, async version for cloud sync
+    const tempScore = ScoreManager.saveSyncScore(finalScore, Math.floor(this.distance), 'normal')
     
     console.log(`Game ended! Final Score: ${finalScore}, Distance: ${Math.floor(this.distance)}m`)
-    console.log(`Score saved with rank: ${savedScore.rank}`)
+    console.log(`Score saved with rank: ${tempScore.rank}`)
     
-    // Stop camera and show game over screen
+    // Stop camera and show game over screen immediately
     this.cameras.main.stopFollow()
     this.cameras.main.setScroll(this.cameras.main.scrollX, this.cameras.main.scrollY)
     
-    this.showGameOverScreen(savedScore)
+    this.showGameOverScreen(tempScore)
+    
+    // Save to cloud in background
+    try {
+      const savedScore = await ScoreManager.saveScore(finalScore, Math.floor(this.distance), 'normal')
+      console.log(`Score synced to cloud with rank: ${savedScore.rank}`)
+    } catch (error) {
+      console.warn('Failed to sync score to cloud:', error)
+    }
   }
 
   /**
@@ -753,7 +769,7 @@ export class GameScene extends Phaser.Scene {
    * Create game over navigation buttons
    */
   private createGameOverButtons(width: number, height: number, currentUser: any): void {
-    const buttonY = height / 2 + 100
+    const buttonY = height / 2 + 160  // Increased from 100 to 160 for more space
     const buttonSpacing = 130
     
     // HOME button (always visible)
@@ -797,7 +813,7 @@ export class GameScene extends Phaser.Scene {
     }
     
     // Add helper text
-    const helpText = this.add.text(width / 2, height / 2 + 140, 'CLICK ANY BUTTON OR PRESS R/SPACE/ENTER', {
+    const helpText = this.add.text(width / 2, height / 2 + 200, 'CLICK ANY BUTTON OR PRESS R/SPACE/ENTER', {
       fontFamily: typography.primary,
       fontSize: '9px',
       color: colors.white,
@@ -871,6 +887,10 @@ export class GameScene extends Phaser.Scene {
   
   private restartGame(): void {
     console.log('Restarting game via page reload...')
+    
+    // Set flag to start game directly after reload (skip start screen)
+    localStorage.setItem('startGameDirectly', 'true')
+    
     window.location.reload() // Preserve the important restart fix
   }
   

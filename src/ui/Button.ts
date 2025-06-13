@@ -62,18 +62,42 @@ export class Button {
     this.background = this.container.scene.add.graphics()
     this.updateButtonStyle()
     
-    // Create button text
-    this.textObject = this.container.scene.add.text(0, 0, text, {
-      fontFamily: typography.primary,
-      fontSize: `${fontSize}px`,
-      color: colors.white,
-      align: 'center',
-      stroke: '#000000',
-      strokeThickness: 2
-    })
-    this.textObject.setOrigin(0.5, 0.5)
+    // Create button text with proper sizing and wrapping
+    this.createButtonText(text, fontSize!)
     
     this.container.add([this.background, this.textObject])
+  }
+  
+  /**
+   * Create button text with automatic sizing to fit within button bounds
+   */
+  private createButtonText(text: string, baseFontSize: number): void {
+    const { width, height } = this.config
+    const maxWidth = width! - 20  // Leave 10px padding on each side
+    const maxHeight = height! - 10 // Leave 5px padding on top/bottom
+    
+    let fontSize = baseFontSize
+    let textObject: Phaser.GameObjects.Text | undefined
+    
+    // Try progressively smaller font sizes until text fits
+    do {
+      if (textObject) textObject.destroy()
+      
+      textObject = this.container.scene.add.text(0, 0, text, {
+        fontFamily: typography.primary,
+        fontSize: `${fontSize}px`,
+        color: colors.white,
+        align: 'center',
+        stroke: '#000000',
+        strokeThickness: Math.max(1, Math.floor(fontSize / 8)),
+        wordWrap: { width: maxWidth }
+      })
+      textObject.setOrigin(0.5, 0.5)
+      
+      fontSize -= 1
+    } while (textObject && (textObject.width > maxWidth || textObject.height > maxHeight) && fontSize > 8)
+    
+    this.textObject = textObject!
   }
   
   /**
@@ -149,7 +173,9 @@ export class Button {
    * Update button text
    */
   public setText(text: string): void {
-    this.textObject.setText(text)
+    this.textObject.destroy()
+    this.createButtonText(text, this.config.fontSize!)
+    this.container.add(this.textObject)
     this.config.text = text
   }
   

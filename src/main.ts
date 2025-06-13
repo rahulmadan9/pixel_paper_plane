@@ -3,6 +3,7 @@ import { BootScene } from '@scenes/BootScene'
 import { StartScene } from '@scenes/StartScene'
 import { GameScene } from '@scenes/GameScene'
 import { ScoresScene } from '@scenes/ScoresScene'
+import { LoginScene } from '@scenes/LoginScene'
 
 /**
  * Pixel Paper Plane - Main game entry point
@@ -34,7 +35,7 @@ const config: Phaser.Types.Core.GameConfig = {
       debug: false
     }
   },
-  scene: [BootScene, StartScene, GameScene, ScoresScene],
+  scene: [BootScene, StartScene, GameScene, ScoresScene, LoginScene],
   input: {
     activePointers: 3 // Support multi-touch
   },

@@ -104,24 +104,24 @@ export class ScoreTable {
   private createHeaders(y: number, showRank: boolean): void {
     const headerStyle = {
       fontFamily: typography.primary,
-      fontSize: '12px',
+      fontSize: '11px',
       color: colors.accent,
       align: 'center' as const
     }
     
     if (showRank) {
-      const rankHeader = this.container.scene.add.text(-120, y, 'Rank', headerStyle)
+      const rankHeader = this.container.scene.add.text(-150, y, 'Rank', headerStyle)
       rankHeader.setOrigin(0.5, 0.5)
       this.container.add(rankHeader)
       this.headerTexts.push(rankHeader)
     }
     
-    const scoreHeader = this.container.scene.add.text(showRank ? 0 : -60, y, 'Score', headerStyle)
+    const scoreHeader = this.container.scene.add.text(showRank ? -20 : -60, y, 'Score', headerStyle)
     scoreHeader.setOrigin(0.5, 0.5)
     this.container.add(scoreHeader)
     this.headerTexts.push(scoreHeader)
     
-    const distanceHeader = this.container.scene.add.text(showRank ? 120 : 60, y, 'Distance', headerStyle)
+    const distanceHeader = this.container.scene.add.text(showRank ? 150 : 60, y, 'Distance', headerStyle)
     distanceHeader.setOrigin(0.5, 0.5)
     this.container.add(distanceHeader)
     this.headerTexts.push(distanceHeader)
@@ -137,24 +137,24 @@ export class ScoreTable {
     
     const rowStyle = {
       fontFamily: typography.primary,
-      fontSize: '14px',
+      fontSize: '12px',  // Reduced from 14px to 12px
       color: textColor,
       align: 'center' as const
     }
     
     if (showRank) {
-      const rankText = this.container.scene.add.text(-120, y, `${displayRank}`, rowStyle)
+      const rankText = this.container.scene.add.text(-150, y, `${displayRank}`, rowStyle)
       rankText.setOrigin(0.5, 0.5)
       this.container.add(rankText)
       this.scoreTexts.push(rankText)
     }
     
-    const scoreText = this.container.scene.add.text(showRank ? 0 : -60, y, score.score.toString(), rowStyle)
+    const scoreText = this.container.scene.add.text(showRank ? -20 : -60, y, score.score.toString(), rowStyle)
     scoreText.setOrigin(0.5, 0.5)
     this.container.add(scoreText)
     this.scoreTexts.push(scoreText)
     
-    const distanceText = this.container.scene.add.text(showRank ? 120 : 60, y, `${score.distance}m`, rowStyle)
+    const distanceText = this.container.scene.add.text(showRank ? 150 : 60, y, `${score.distance}m`, rowStyle)
     distanceText.setOrigin(0.5, 0.5)
     this.container.add(distanceText)
     this.scoreTexts.push(distanceText)

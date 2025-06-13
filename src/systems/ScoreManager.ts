@@ -1,7 +1,30 @@
 /**
- * ScoreManager - Handles score persistence and ranking
- * Session-based storage with localStorage backup
+ * ScoreManager - Handles score persistence and ranking with Firebase integration
+ * Local storage with cloud sync for authenticated users
  */
+
+import { initializeApp } from 'firebase/app'
+import { 
+  getFirestore, 
+  collection, 
+  doc, 
+  setDoc, 
+  getDoc, 
+  getDocs, 
+  query, 
+  where, 
+  orderBy, 
+  limit,
+  addDoc,
+  serverTimestamp,
+  writeBatch,
+  onSnapshot,
+  enableNetwork,
+  disableNetwork
+} from 'firebase/firestore'
+import type { Firestore, QuerySnapshot, DocumentData, Timestamp } from 'firebase/firestore'
+import { AuthManager } from './AuthManager'
+import type { User } from './AuthManager'
 
 export interface GameScore {
   score: number
@@ -9,6 +32,10 @@ export interface GameScore {
   timestamp: number
   rank?: number
   sessionId?: string // For guest session tracking
+  userId?: string // For Firebase sync
+  id?: string // Firestore document ID
+  gameMode?: string // Normal, challenge, etc.
+  syncedToCloud?: boolean // Whether this score is saved to Firestore
 }
 
 export interface ScoreStats {
@@ -24,12 +51,292 @@ export interface SessionData {
   startTime: number
 }
 
+export interface CloudSyncResult {
+  success: boolean
+  syncedCount: number
+  errors: string[]
+}
+
 export class ScoreManager {
   private static readonly STORAGE_KEY = 'pixelPaperPlane_scores'
   private static readonly SESSION_KEY = 'pixelPaperPlane_session'
   private static readonly MAX_STORED_SCORES = 50
   private static sessionData: SessionData | null = null
+  private static firestore: Firestore | null = null
+  private static authManager: AuthManager = AuthManager.getInstance()
+  private static isInitialized = false
+  private static isOnline = navigator.onLine
+  private static pendingSyncScores: GameScore[] = []
   
+  /**
+   * Initialize Firestore connection
+   */
+  private static async initializeFirestore(): Promise<void> {
+    if (this.isInitialized || !this.authManager.isFirebaseAvailable()) {
+      return
+    }
+    
+    try {
+      // Get Firebase app from AuthManager
+      const firebaseConfig = {
+        apiKey: import.meta.env.VITE_FIREBASE_API_KEY || "demo-api-key",
+        authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN || "paper-plane-c713f.firebaseapp.com",
+        projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID || "paper-plane-c713f",
+        storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET || "paper-plane-c713f.appspot.com",
+        messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID || "123456789",
+        appId: import.meta.env.VITE_FIREBASE_APP_ID || "1:123456789:web:demo-app-id"
+      }
+      
+      const app = initializeApp(firebaseConfig)
+      this.firestore = getFirestore(app)
+      
+      // Monitor online/offline status
+      window.addEventListener('online', () => {
+        this.isOnline = true
+        this.syncPendingScores()
+      })
+      
+      window.addEventListener('offline', () => {
+        this.isOnline = false
+      })
+      
+      this.isInitialized = true
+      console.log('ScoreManager: Firestore initialized')
+      
+      // Sync any pending scores
+      this.syncPendingScores()
+      
+    } catch (error) {
+      console.warn('ScoreManager: Failed to initialize Firestore:', error)
+    }
+  }
+  
+  /**
+   * Sync pending scores to Firestore when online
+   */
+  private static async syncPendingScores(): Promise<void> {
+    if (!this.isOnline || !this.firestore || this.pendingSyncScores.length === 0) {
+      return
+    }
+
+    const user = this.authManager.getCurrentUser()
+    if (!user || user.isGuest) {
+      return // Only sync for authenticated users
+    }
+
+    try {
+      const batch = writeBatch(this.firestore)
+      const syncedScores: GameScore[] = []
+
+      for (const score of this.pendingSyncScores) {
+        const scoreData = {
+          score: score.score,
+          distance: score.distance,
+          timestamp: new Date(score.timestamp),
+          userId: user.id,
+          gameMode: score.gameMode || 'normal',
+          sessionId: score.sessionId
+        }
+
+        const docRef = doc(collection(this.firestore, 'scores'))
+        batch.set(docRef, scoreData)
+        syncedScores.push({ ...score, id: docRef.id, syncedToCloud: true })
+      }
+
+      await batch.commit()
+      
+      // Update local storage to mark scores as synced
+      this.updateLocalScoresSync(syncedScores)
+      
+      // Clear pending scores
+      this.pendingSyncScores = []
+      
+      console.log(`ScoreManager: Synced ${syncedScores.length} scores to Firestore`)
+    } catch (error) {
+      console.warn('ScoreManager: Failed to sync scores:', error)
+    }
+  }
+
+  /**
+   * Update local scores to mark them as synced
+   */
+  private static updateLocalScoresSync(syncedScores: GameScore[]): void {
+    const allScores = this.getAllScores()
+    const updatedScores = allScores.map(localScore => {
+      const synced = syncedScores.find(s => s.timestamp === localScore.timestamp)
+      return synced ? { ...localScore, syncedToCloud: true, id: synced.id } : localScore
+    })
+    this.saveToStorage(updatedScores)
+  }
+
+  /**
+   * Save score to Firestore
+   */
+  private static async saveScoreToFirestore(score: GameScore): Promise<GameScore | null> {
+    if (!this.firestore || !this.isOnline) {
+      return null
+    }
+
+    const user = this.authManager.getCurrentUser()
+    if (!user || user.isGuest) {
+      return null // Only save to Firestore for authenticated users
+    }
+
+    try {
+      const scoreData = {
+        score: score.score,
+        distance: score.distance,
+        timestamp: new Date(score.timestamp),
+        userId: user.id,
+        gameMode: score.gameMode || 'normal',
+        sessionId: score.sessionId
+      }
+
+      const docRef = await addDoc(collection(this.firestore, 'scores'), scoreData)
+      
+      return {
+        ...score,
+        id: docRef.id,
+        userId: user.id,
+        syncedToCloud: true
+      }
+    } catch (error) {
+      console.warn('ScoreManager: Failed to save score to Firestore:', error)
+      return null
+    }
+  }
+
+  /**
+   * Load scores from Firestore for current user
+   */
+  public static async loadUserScoresFromFirestore(): Promise<GameScore[]> {
+    await this.initializeFirestore()
+    
+    if (!this.firestore || !this.isOnline) {
+      return []
+    }
+
+    const user = this.authManager.getCurrentUser()
+    if (!user || user.isGuest) {
+      return []
+    }
+
+    try {
+      const q = query(
+        collection(this.firestore, 'scores'),
+        where('userId', '==', user.id),
+        orderBy('score', 'desc'),
+        limit(this.MAX_STORED_SCORES)
+      )
+
+      const querySnapshot = await getDocs(q)
+      const cloudScores: GameScore[] = []
+
+      querySnapshot.forEach((doc) => {
+        const data = doc.data()
+        cloudScores.push({
+          id: doc.id,
+          score: data.score,
+          distance: data.distance,
+          timestamp: data.timestamp?.toDate?.()?.getTime() || data.timestamp?.toMillis?.() || Date.now(),
+          userId: data.userId,
+          gameMode: data.gameMode || 'normal',
+          sessionId: data.sessionId,
+          syncedToCloud: true
+        })
+      })
+
+      return cloudScores
+    } catch (error) {
+      console.warn('ScoreManager: Failed to load scores from Firestore:', error)
+      return []
+    }
+  }
+
+  /**
+   * Transfer local scores to Firebase when user creates account
+   */
+  public static async transferLocalScoresToFirestore(): Promise<CloudSyncResult> {
+    await this.initializeFirestore()
+    
+    const result: CloudSyncResult = {
+      success: false,
+      syncedCount: 0,
+      errors: []
+    }
+
+    if (!this.firestore || !this.isOnline) {
+      result.errors.push('Firestore not available or offline')
+      return result
+    }
+
+    const user = this.authManager.getCurrentUser()
+    if (!user || user.isGuest) {
+      result.errors.push('User must be authenticated to sync scores')
+      return result
+    }
+
+    try {
+      const localScores = this.getAllScores().filter(score => !score.syncedToCloud)
+      
+      if (localScores.length === 0) {
+        result.success = true
+        return result
+      }
+
+      const batch = writeBatch(this.firestore)
+      
+      for (const score of localScores) {
+        const scoreData = {
+          score: score.score,
+          distance: score.distance,
+          timestamp: new Date(score.timestamp),
+          userId: user.id,
+          gameMode: score.gameMode || 'normal',
+          sessionId: score.sessionId
+        }
+
+        const docRef = doc(collection(this.firestore, 'scores'))
+        batch.set(docRef, scoreData)
+      }
+
+      await batch.commit()
+      
+      // Update local scores to mark as synced
+      const updatedScores = localScores.map(score => ({
+        ...score,
+        syncedToCloud: true,
+        userId: user.id
+      }))
+      
+      this.updateLocalScoresSync(updatedScores)
+      
+      result.success = true
+      result.syncedCount = localScores.length
+      
+      console.log(`ScoreManager: Transferred ${localScores.length} local scores to Firestore`)
+      
+    } catch (error: any) {
+      result.errors.push(error.message || 'Failed to transfer scores')
+      console.error('ScoreManager: Score transfer failed:', error)
+    }
+
+    return result
+  }
+
+  /**
+   * Set up authentication state listener for automatic score syncing
+   */
+  private static setupAuthListener(): void {
+    this.authManager.onAuthStateChanged(async (user) => {
+      if (user && !user.isGuest) {
+        // User just logged in or was upgraded from guest
+        console.log('ScoreManager: User authenticated, syncing scores...')
+        await this.transferLocalScoresToFirestore()
+      }
+    })
+  }
+
   /**
    * Initialize or get current session with validation
    */
@@ -37,6 +344,9 @@ export class ScoreManager {
     if (this.sessionData && this.isValidSessionData(this.sessionData)) {
       return this.sessionData
     }
+    
+    // Set up auth state listener for score syncing
+    this.setupAuthListener()
     
     try {
       const stored = sessionStorage.getItem(this.SESSION_KEY)
@@ -91,11 +401,87 @@ export class ScoreManager {
     const session = this.initializeSession()
     return session.scores
   }
+
+  /**
+   * Manually trigger sync of all scores with Firestore
+   */
+  public static async syncWithFirestore(): Promise<CloudSyncResult> {
+    await this.initializeFirestore()
+    
+    const result: CloudSyncResult = {
+      success: false,
+      syncedCount: 0,
+      errors: []
+    }
+
+    const user = this.authManager.getCurrentUser()
+    if (!user || user.isGuest) {
+      result.errors.push('User must be authenticated to sync')
+      return result
+    }
+
+    try {
+      // First, transfer any local scores that haven't been synced
+      const transferResult = await this.transferLocalScoresToFirestore()
+      result.syncedCount += transferResult.syncedCount
+      result.errors.push(...transferResult.errors)
+
+      // Then, load and merge cloud scores
+      const cloudScores = await this.loadUserScoresFromFirestore()
+      if (cloudScores.length > 0) {
+        const localScores = this.getAllScores()
+        const mergedScores = this.mergeLocalAndCloudScores(localScores, cloudScores)
+        this.saveToStorage(mergedScores)
+      }
+
+      result.success = transferResult.success
+      console.log(`ScoreManager: Sync completed. ${result.syncedCount} scores synced.`)
+      
+    } catch (error: any) {
+      result.errors.push(error.message || 'Sync failed')
+      console.error('ScoreManager: Sync failed:', error)
+    }
+
+    return result
+  }
+
+  /**
+   * Merge local and cloud scores, removing duplicates and maintaining sync status
+   */
+  private static mergeLocalAndCloudScores(localScores: GameScore[], cloudScores: GameScore[]): GameScore[] {
+    const merged = [...cloudScores] // Start with cloud scores
+
+    // Add local scores that aren't in the cloud
+    localScores.forEach(localScore => {
+      const existsInCloud = cloudScores.some(cloudScore => 
+        cloudScore.timestamp === localScore.timestamp ||
+        (cloudScore.score === localScore.score && 
+         cloudScore.distance === localScore.distance &&
+         Math.abs(cloudScore.timestamp - localScore.timestamp) < 5000) // Within 5 seconds
+      )
+
+      if (!existsInCloud) {
+        merged.push(localScore)
+      }
+    })
+
+    // Sort by score and add rankings
+    return merged
+      .sort((a, b) => b.score - a.score)
+      .slice(0, this.MAX_STORED_SCORES)
+      .map((score, index) => ({
+        ...score,
+        rank: index + 1
+      }))
+  }
   
   /**
-   * Save a new score to localStorage and session
+   * Save a new score to localStorage, session, and Firebase
    */
-  public static saveScore(score: number, distance: number): GameScore {
+  public static async saveScore(score: number, distance: number, gameMode: string = 'normal'): Promise<GameScore> {
+    // Initialize Firestore if needed
+    await this.initializeFirestore()
+    
     // Validate input
     const validatedScore = this.validateScoreInput(score, distance)
     if (!validatedScore.isValid) {
@@ -104,24 +490,30 @@ export class ScoreManager {
         score: 0,
         distance: 0,
         timestamp: Date.now(),
-        rank: 0
+        rank: 0,
+        gameMode,
+        syncedToCloud: false
       }
     }
     
     const session = this.initializeSession()
+    const user = this.authManager.getCurrentUser()
     
     const newScore: GameScore = {
       score: validatedScore.score,
       distance: validatedScore.distance,
       timestamp: Date.now(),
-      sessionId: session.sessionId
+      sessionId: session.sessionId,
+      gameMode,
+      userId: user?.id,
+      syncedToCloud: false
     }
     
     // Add to session
     session.scores.push(newScore)
     this.saveSessionData()
     
-    // Save to persistent storage
+    // Save to persistent storage first (ensures we don't lose the score)
     const scores = this.getAllScores()
     scores.push(newScore)
     
@@ -138,9 +530,50 @@ export class ScoreManager {
     
     this.saveToStorage(rankedScores)
     
-    // Return the saved score with its rank
-    const savedScore = rankedScores.find(s => s.timestamp === newScore.timestamp)
-    return savedScore || newScore
+    // Get the saved score with its rank
+    let savedScore = rankedScores.find(s => s.timestamp === newScore.timestamp) || newScore
+    
+    // Try to save to Firestore for authenticated users
+    if (user && !user.isGuest) {
+      const cloudScore = await this.saveScoreToFirestore(savedScore)
+      if (cloudScore) {
+        // Update local storage with cloud sync info
+        savedScore = cloudScore
+        const updatedScores = rankedScores.map(s => 
+          s.timestamp === savedScore.timestamp ? savedScore : s
+        )
+        this.saveToStorage(updatedScores)
+      } else {
+        // Add to pending sync if save failed
+        this.pendingSyncScores.push(savedScore)
+      }
+    }
+    
+    return savedScore
+  }
+
+  /**
+   * Save a new score (backward compatibility - sync version)
+   */
+  public static saveSyncScore(score: number, distance: number, gameMode: string = 'normal'): GameScore {
+    // For immediate compatibility, we'll use the async version but return a basic score
+    this.saveScore(score, distance, gameMode).catch(error => {
+      console.warn('ScoreManager: Async save failed:', error)
+    })
+    
+    // Return a basic score immediately for backward compatibility
+    const session = this.initializeSession()
+    const user = this.authManager.getCurrentUser()
+    
+    return {
+      score,
+      distance,
+      timestamp: Date.now(),
+      sessionId: session.sessionId,
+      gameMode,
+      userId: user?.id,
+      syncedToCloud: false
+    }
   }
   
   /**

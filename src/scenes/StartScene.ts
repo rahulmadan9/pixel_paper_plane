@@ -27,6 +27,23 @@ export class StartScene extends Phaser.Scene {
   public create(): void {
     const { width, height } = this.cameras.main
     
+    // Check if we should start game directly after reload
+    if (localStorage.getItem('startGameDirectly') === 'true') {
+      localStorage.removeItem('startGameDirectly')
+      console.log('Starting game directly after reload...')
+      
+      // Create guest user if not authenticated (preserve the logic)
+      if (!this.authManager.isAuthenticated()) {
+        this.authManager.createGuestUser().then(() => {
+          console.log('Created guest user for this session')
+        })
+      }
+      
+      // Start game scene directly
+      this.scene.start('GameScene')
+      return
+    }
+    
     this.createBackground(width, height)
     this.createTitle(width, height)
     this.createUserStatus(width, height)
@@ -362,11 +379,16 @@ export class StartScene extends Phaser.Scene {
     
     // Create guest user if not authenticated
     if (!this.authManager.isAuthenticated()) {
-      this.authManager.createGuestUser()
-      console.log('Created guest user for this session')
+      this.authManager.createGuestUser().then(() => {
+        console.log('Created guest user for this session')
+      })
     }
     
-    this.scene.start('GameScene')
+    // Set flag to start game directly after reload
+    localStorage.setItem('startGameDirectly', 'true')
+    
+    // Reload to prevent asset glitching (important fix)
+    window.location.reload()
   }
   
   /**
@@ -389,11 +411,7 @@ export class StartScene extends Phaser.Scene {
    */
   private showLogin(): void {
     console.log('Navigating to login...')
-    // TODO: Navigate to LoginScene when implemented
-    // this.scene.start('LoginScene')
-    
-    // Temporary: simulate login for testing
-    this.authManager.login('test@example.com', 'password')
+    this.scene.start('LoginScene')
   }
   
   /**
@@ -401,11 +419,7 @@ export class StartScene extends Phaser.Scene {
    */
   private upgradeGuestAccount(): void {
     console.log('Navigating to account upgrade...')
-    // TODO: Navigate to account creation flow within LoginScene
-    // this.scene.start('LoginScene', { mode: 'upgrade' })
-    
-    // Temporary: simulate account upgrade for testing
-    this.authManager.login('upgraded@example.com', 'password')
+    this.scene.start('LoginScene', { upgrade: true })
   }
   
   /**
