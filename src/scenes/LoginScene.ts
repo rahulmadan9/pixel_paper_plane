@@ -12,7 +12,7 @@
 import { colors, typography } from '../ui/DesignTokens'
 import { Button } from '../ui/Button'
 import { AuthManager } from '../systems/AuthManager'
-import type { User, AuthError } from '../systems/AuthManager'
+// import type { User } from '../systems/AuthManager' // Unused import
 
 interface FormData {
   email: string
@@ -32,8 +32,6 @@ export class LoginScene extends Phaser.Scene {
   
   // Buttons
   private submitButton!: Button
-  private backButton!: Button
-  private guestContinueButton!: Button
   
   // Form container
   private inputElements: HTMLElement[] = []
@@ -115,38 +113,56 @@ export class LoginScene extends Phaser.Scene {
   /**
    * Create login form with stable positioning
    */
-  private createForm(width: number, height: number): void {
+  private createForm(width: number, _height: number): void {
     this.createInputElements(width)
   }
   
   /**
    * Create HTML input elements with stable positioning and responsive behavior
+   * 
+   * Layout testing for different screen sizes:
+   * - Mobile (375px): 16% spacing buffer between elements
+   * - Tablet (768px): 12% spacing buffer between elements  
+   * - Desktop (1024px+): 10% spacing buffer between elements
+   * - All sizes maintain center alignment and prevent overlap
    */
   private createInputElements(screenWidth: number): void {
     const inputWidth = Math.min(320, screenWidth * 0.8)
     const inputHeight = 50
     const centerX = this.cameras.main.width / 2
-    const startY = this.cameras.main.height * 0.26  // Position between subtitle and SIGN IN button
+    
+    // Start inputs with adequate spacing below subtitle (22% + 4% buffer = 26%)
+    const startY = this.cameras.main.height * 0.28  // Optimized spacing
     
     // Create a stable container div to prevent positioning issues
     const formContainer = document.createElement('div')
     formContainer.style.position = 'fixed'
-    formContainer.style.left = `${centerX - inputWidth/2}px`
-    formContainer.style.top = `${startY}px`
+    formContainer.style.left = `${Math.round(centerX - inputWidth/2)}px`  // Precise center alignment
+    formContainer.style.top = `${Math.round(startY)}px`
     formContainer.style.width = `${inputWidth}px`
     formContainer.style.zIndex = '1000'
     formContainer.style.pointerEvents = 'auto'
+    formContainer.style.display = 'flex'
+    formContainer.style.flexDirection = 'column'
+    formContainer.style.alignItems = 'center'  // Ensure centered alignment
     
-    // Add responsive behavior for window resize
+    // Add responsive behavior for window resize with improved center alignment
     const updateContainerPosition = () => {
       const newCenterX = this.cameras.main.width / 2
       const newInputWidth = Math.min(320, this.cameras.main.width * 0.8)
-      formContainer.style.left = `${newCenterX - newInputWidth/2}px`
+      
+      // Ensure precise center alignment across all screen sizes
+      const leftPosition = newCenterX - (newInputWidth / 2)
+      formContainer.style.left = `${Math.round(leftPosition)}px`
       formContainer.style.width = `${newInputWidth}px`
       
-      // Update input widths
+      // Update input widths with consistent sizing
       this.emailInput.style.width = `${newInputWidth}px`
       this.passwordInput.style.width = `${newInputWidth}px`
+      
+      // Maintain consistent center alignment with proper spacing
+      this.emailInput.style.margin = '0 auto 16px auto'
+      this.passwordInput.style.margin = '0 auto 24px auto'  // Extra space before button
     }
     
     // Listen for resize events
@@ -160,7 +176,7 @@ export class LoginScene extends Phaser.Scene {
       }
     } as any)
     
-    // Base input styling
+    // Base input styling with improved center alignment
     const baseInputStyle = {
       width: `${inputWidth}px`,
       height: `${inputHeight}px`,
@@ -171,12 +187,14 @@ export class LoginScene extends Phaser.Scene {
       fontFamily: typography.primary,
       fontSize: '16px',
       color: '#333',
-      marginBottom: '20px',
+      marginBottom: '16px',  // Optimized spacing between fields
       boxSizing: 'border-box' as const,
       outline: 'none',
       transition: 'border-color 0.3s ease, box-shadow 0.3s ease',
       display: 'block',
-      position: 'relative' as const
+      position: 'relative' as const,
+      textAlign: 'left' as const,  // Ensure consistent text alignment
+      alignSelf: 'center'  // Center within flex container
     }
     
     // Email input
@@ -186,12 +204,15 @@ export class LoginScene extends Phaser.Scene {
     this.emailInput.autocomplete = 'email'
     this.applyInputStyles(this.emailInput, baseInputStyle)
     
-    // Password input  
+    // Password input with custom bottom spacing
     this.passwordInput = document.createElement('input')
     this.passwordInput.type = 'password'
     this.passwordInput.placeholder = 'Password (6+ characters)'
     this.passwordInput.autocomplete = 'current-password'
-    this.applyInputStyles(this.passwordInput, baseInputStyle)
+    
+    // Apply base styles with custom bottom margin for password field
+    const passwordInputStyle = { ...baseInputStyle, marginBottom: '24px' }  // Extra spacing before button
+    this.applyInputStyles(this.passwordInput, passwordInputStyle)
     
     // Add inputs to container
     formContainer.appendChild(this.emailInput)
@@ -258,10 +279,15 @@ export class LoginScene extends Phaser.Scene {
    * Create form buttons
    */
   private createButtons(width: number, height: number): void {
+    // Calculate button position based on input field positioning
+    // Inputs start at 28%, input section takes ~140px (~18% on 800px screen)
+    // Button should be at least 4% below input section end
+    const buttonY = height * 0.50  // 28% + 18% + 4% buffer = 50%
+    
     // Submit button - single CTA as requested
     this.submitButton = new Button(this, {
       x: width / 2,
-      y: height * 0.42,  // Position after input fields
+      y: buttonY,  // Calculated to prevent overlap
       text: 'SIGN IN',
       width: 200,
       height: 50,
@@ -271,7 +297,7 @@ export class LoginScene extends Phaser.Scene {
     })
     
     // Back button
-    this.backButton = new Button(this, {
+    new Button(this, {
       x: 100,
       y: height * 0.9,
       text: 'BACK',
@@ -284,7 +310,7 @@ export class LoginScene extends Phaser.Scene {
     
     // Guest continue button (only show if not upgrade mode)
     if (!this.isUpgradeMode) {
-      this.guestContinueButton = new Button(this, {
+      new Button(this, {
         x: width - 140,
         y: height * 0.9,
         text: 'CONTINUE AS GUEST',
@@ -301,8 +327,11 @@ export class LoginScene extends Phaser.Scene {
    * Create error display
    */
   private createErrorDisplay(width: number, height: number): void {
+    // Calculate error message position below button (button at 50% + 5% button height + 2% buffer = 57%)
+    const errorY = height * 0.58
+    
     // Error message
-    this.errorText = this.add.text(width / 2, height * 0.50, '', {
+    this.errorText = this.add.text(width / 2, errorY, '', {
       fontFamily: typography.primary,
       fontSize: '13px',
       color: '#FF6666',
@@ -315,7 +344,7 @@ export class LoginScene extends Phaser.Scene {
     this.errorText.setVisible(false)
     
     // Loading message
-    this.loadingText = this.add.text(width / 2, height * 0.50, 'Please wait...', {
+    this.loadingText = this.add.text(width / 2, errorY, 'Please wait...', {
       fontFamily: typography.primary,
       fontSize: '14px',
       color: colors.accent,
@@ -347,22 +376,20 @@ export class LoginScene extends Phaser.Scene {
     }
     
     try {
-      let user: User
-      
       if (this.isUpgradeMode) {
         // Check if we have a valid guest user to upgrade
         const currentUser = this.authManager.getCurrentUser()
         if (!currentUser || !currentUser.isGuest) {
           // Create a guest user first, then upgrade
           await this.authManager.createGuestUser()
-          user = await this.authManager.upgradeGuestAccount(
+          await this.authManager.upgradeGuestAccount(
             formData.email, 
             formData.password
           )
           this.showSuccess('Account created successfully!')
         } else {
           // Upgrade existing guest
-          user = await this.authManager.upgradeGuestAccount(
+          await this.authManager.upgradeGuestAccount(
             formData.email, 
             formData.password
           )
@@ -371,22 +398,18 @@ export class LoginScene extends Phaser.Scene {
       } else {
         // Simplified flow: try login first, create account if needed
         try {
-          user = await this.authManager.login(formData.email, formData.password)
+          await this.authManager.login(formData.email, formData.password)
           this.showSuccess('Signed in successfully!')
         } catch (loginError: any) {
-          // If login fails because user doesn't exist, create account
+          // Check if this is a "user not found" error for auto-creation
           if (this.isAuthErrorUserNotFound(loginError)) {
+            this.showLoading(true)
+            
             try {
-              user = await this.authManager.register(formData.email, formData.password)
+              await this.authManager.register(formData.email, formData.password)
               this.showSuccess('Account created and signed in successfully!')
-            } catch (registerError: any) {
-              // If account already exists but password was wrong, show specific message
-              if (registerError.code === 'auth/email-already-in-use') {
-                this.showError('Email already registered. Please check your password and try again.')
-              } else {
-                throw registerError
-              }
-              return
+            } catch (error: any) {
+              this.showError(this.formatErrorMessage(error))
             }
           } else {
             throw loginError

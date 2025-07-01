@@ -107,6 +107,11 @@ export class BootScene extends Phaser.Scene {
     // Cloud sprites
     this.load.image('cloud1', 'assets/sprites/cloud1.png')
     this.load.image('cloud2', 'assets/sprites/cloud2.png')
+    
+    // Tree and bush sprites
+    this.load.image('tree1', 'assets/sprites/tree1.png')
+    this.load.image('tree2', 'assets/sprites/tree2.png')
+    this.load.image('bush', 'assets/sprites/bush.png')
   }
 
   /**
@@ -116,6 +121,7 @@ export class BootScene extends Phaser.Scene {
     this.createFallbackPlane()
     this.createFallbackRings()
     this.createFallbackClouds()
+    this.createFallbackTrees()
     this.createGroundTexture()
   }
 
@@ -241,6 +247,112 @@ export class BootScene extends Phaser.Scene {
     graphics.arc(50, 12, 10, 0, Math.PI * 2)
     graphics.arc(65, 15, 8, 0, Math.PI * 2)
     graphics.fill()
+  }
+
+  /**
+   * Create fallback tree and bush textures
+   */
+  private createFallbackTrees(): void {
+    this.createFallbackTree('tree1-fallback', 'tall')
+    this.createFallbackTree('tree2-fallback', 'wide')
+    this.createFallbackBush('bush-fallback')
+  }
+
+  /**
+   * Create individual fallback tree
+   */
+  private createFallbackTree(key: string, variant: 'tall' | 'wide'): void {
+    const graphics = this.add.graphics()
+    
+    if (variant === 'tall') {
+      // Tall tree (425x663 style)
+      this.drawTallTree(graphics)
+      graphics.generateTexture(key, 60, 100)
+    } else {
+      // Wide tree (490x625 style)
+      this.drawWideTree(graphics)
+      graphics.generateTexture(key, 70, 90)
+    }
+    
+    graphics.destroy()
+  }
+
+  /**
+   * Draw tall tree shape
+   */
+  private drawTallTree(graphics: Phaser.GameObjects.Graphics): void {
+    // Tree trunk
+    graphics.fillStyle(0x654321) // Brown trunk
+    graphics.fillRect(25, 70, 10, 30)
+    
+    // Tree foliage layers (from bottom to top)
+    graphics.fillStyle(0x2D5016) // Dark green
+    graphics.fillEllipse(30, 65, 35, 25)
+    
+    graphics.fillStyle(0x4A7C59) // Medium green
+    graphics.fillEllipse(30, 50, 30, 20)
+    
+    graphics.fillStyle(0x6FAB80) // Light green
+    graphics.fillEllipse(30, 35, 25, 15)
+    
+    // Tree top
+    graphics.fillStyle(0x4A7C59)
+    graphics.fillEllipse(30, 25, 20, 12)
+  }
+
+  /**
+   * Draw wide tree shape
+   */
+  private drawWideTree(graphics: Phaser.GameObjects.Graphics): void {
+    // Tree trunk
+    graphics.fillStyle(0x654321) // Brown trunk
+    graphics.fillRect(30, 65, 12, 25)
+    
+    // Wide canopy layers
+    graphics.fillStyle(0x2D5016) // Dark green
+    graphics.fillEllipse(35, 60, 45, 20)
+    
+    graphics.fillStyle(0x4A7C59) // Medium green
+    graphics.fillEllipse(35, 50, 40, 18)
+    
+    graphics.fillStyle(0x6FAB80) // Light green
+    graphics.fillEllipse(35, 40, 35, 15)
+    
+    // Side branches
+    graphics.fillStyle(0x4A7C59)
+    graphics.fillEllipse(20, 55, 15, 8)
+    graphics.fillEllipse(50, 55, 15, 8)
+  }
+
+  /**
+   * Create fallback bush texture
+   */
+  private createFallbackBush(key: string): void {
+    const graphics = this.add.graphics()
+    
+    this.drawBush(graphics)
+    graphics.generateTexture(key, 50, 30)
+    graphics.destroy()
+  }
+
+  /**
+   * Draw bush shape
+   */
+  private drawBush(graphics: Phaser.GameObjects.Graphics): void {
+    // Bush base
+    graphics.fillStyle(0x4A7C59) // Medium green
+    graphics.fillEllipse(25, 20, 40, 15)
+    
+    // Bush clusters
+    graphics.fillStyle(0x6FAB80) // Light green
+    graphics.fillEllipse(15, 15, 18, 12)
+    graphics.fillEllipse(35, 15, 18, 12)
+    
+    // Top details
+    graphics.fillStyle(0x2D5016) // Dark green accents
+    graphics.fillEllipse(12, 12, 8, 6)
+    graphics.fillEllipse(25, 10, 10, 7)
+    graphics.fillEllipse(38, 12, 8, 6)
   }
 
   /**

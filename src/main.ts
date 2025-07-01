@@ -3,7 +3,9 @@ import { BootScene } from '@scenes/BootScene'
 import { StartScene } from '@scenes/StartScene'
 import { GameScene } from '@scenes/GameScene'
 import { ScoresScene } from '@scenes/ScoresScene'
-import { LoginScene } from '@scenes/LoginScene'
+// TEMPORARY: Login functionality temporarily disabled for frontend
+// TODO: Uncomment the following line to restore login functionality
+// import { LoginScene } from '@scenes/LoginScene'
 
 /**
  * Pixel Paper Plane - Main game entry point
@@ -35,7 +37,9 @@ const config: Phaser.Types.Core.GameConfig = {
       debug: false
     }
   },
-  scene: [BootScene, StartScene, GameScene, ScoresScene, LoginScene],
+  // TEMPORARY: LoginScene temporarily disabled for frontend
+  // TODO: Restore LoginScene by uncommenting it in the scene array below
+  scene: [BootScene, StartScene, GameScene, ScoresScene/*, LoginScene*/],
   input: {
     activePointers: 3 // Support multi-touch
   },

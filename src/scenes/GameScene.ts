@@ -122,24 +122,14 @@ export class GameScene extends Phaser.Scene {
    * Add trees, rocks, and grass to ground
    */
   private addGroundDecorations(x: number): void {
-    // Trees (30% chance)
+    // Trees (30% chance) - now using sprites
     if (Math.random() < 0.3) {
-      const treeHeight = 40 + Math.random() * 30
-      const tree = this.add.rectangle(
-        x + 50 + Math.random() * 50, 
-        this.groundLevel - treeHeight/2,
-        8, 
-        treeHeight, 
-        0x2D5016
-      )
-      
-      // Tree top
-      this.add.circle(
-        tree.x, 
-        tree.y - treeHeight/2 + 5, 
-        12 + Math.random() * 8, 
-        0x4A7C59
-      )
+      this.addTreeSprite(x)
+    }
+    
+    // Bushes (15% chance) - new decoration type
+    if (Math.random() < 0.15) {
+      this.addBushSprite(x)
     }
     
     // Rocks (20% chance)
@@ -168,6 +158,49 @@ export class GameScene extends Phaser.Scene {
         )
       }
     }
+  }
+
+  /**
+   * Add tree sprite to ground decoration
+   */
+  private addTreeSprite(x: number): void {
+    // Randomly choose between tree1 and tree2
+    const treeType = Math.random() < 0.5 ? 'tree1' : 'tree2'
+    
+    // Try to use sprite assets first, fallback to generated textures
+    const spriteKey = this.textures.exists(treeType) ? treeType : `${treeType}-fallback`
+    
+    // Position the tree
+    const treeX = x + 50 + Math.random() * 50
+    const tree = this.add.image(treeX, this.groundLevel, spriteKey)
+    
+    // Scale down the large sprites to appropriate game size
+    const scale = treeType === 'tree1' ? 0.12 : 0.14 // Adjusted for different tree sizes
+    tree.setScale(scale)
+    
+    // Position properly on ground (anchor to bottom)
+    tree.setOrigin(0.5, 1)
+    tree.setY(this.groundLevel)
+  }
+
+  /**
+   * Add bush sprite to ground decoration
+   */
+  private addBushSprite(x: number): void {
+    // Try to use sprite asset first, fallback to generated texture
+    const spriteKey = this.textures.exists('bush') ? 'bush' : 'bush-fallback'
+    
+    // Position the bush
+    const bushX = x + 25 + Math.random() * 75
+    const bush = this.add.image(bushX, this.groundLevel, spriteKey)
+    
+    // Scale down the bush sprite to appropriate size (342x217 original)
+    const scale = 0.08
+    bush.setScale(scale)
+    
+    // Position properly on ground (anchor to bottom)
+    bush.setOrigin(0.5, 1)
+    bush.setY(this.groundLevel)
   }
 
   /**
@@ -728,8 +761,8 @@ export class GameScene extends Phaser.Scene {
     // Authentication-aware messaging and buttons
     this.createAuthAwareUI(width, height, currentUser)
     
-    // Show top 3 personal scores
-    this.showTopPersonalScores(width, height)
+    // Show top 3 personal scores with current game highlighted
+    this.showTopPersonalScores(width, height, savedScore)
     
     // Navigation buttons
     this.createGameOverButtons(width, height, currentUser)
@@ -767,33 +800,43 @@ export class GameScene extends Phaser.Scene {
   
   /**
    * Create game over navigation buttons
+   * TEMPORARY: Authentication button temporarily disabled for frontend
    */
-  private createGameOverButtons(width: number, height: number, currentUser: any): void {
+  private createGameOverButtons(width: number, height: number, _currentUser: any): void {
     const buttonY = height / 2 + 160  // Increased from 100 to 160 for more space
     const buttonSpacing = 130
     
-    // HOME button (always visible)
+    // Calculate proper center positioning for button pair
+    // Each button is 100px wide, with 130px spacing between centers
+    // Total spread: 130px, so each button is 65px from the pair's center
+    const buttonPairCenter = width / 2
+    const halfSpacing = buttonSpacing / 2
+    
+    // HOME button (always visible) - positioned left of center
     const homeButton = this.createGameOverButton(
-      width / 2 - buttonSpacing,
+      buttonPairCenter - halfSpacing,
       buttonY,
       'HOME',
       colors.primary,
       () => this.goToStartScene()
     )
     
-    // RESTART button (always visible)
+    // RESTART button (always visible) - positioned right of center
     const restartButton = this.createGameOverButton(
-      width / 2,
+      buttonPairCenter + halfSpacing,
       buttonY,
       'RESTART',
       colors.accent,
       () => this.restartGame()
     )
     
+    // TEMPORARY: Authentication button temporarily disabled for frontend
+    // TODO: Uncomment the following block to restore authentication/scores navigation
+    /*
     // Authentication-aware third button
     if (!currentUser || currentUser.isGuest) {
-      // LOGIN/CREATE ACCOUNT button for guests
-      const authButtonText = !currentUser ? 'LOGIN' : 'CREATE ACCOUNT'
+      // LOGIN button for guests
+      const authButtonText = 'LOGIN'
       this.createGameOverButton(
         width / 2 + buttonSpacing,
         buttonY,
@@ -811,6 +854,7 @@ export class GameScene extends Phaser.Scene {
         () => this.goToScores()
       )
     }
+    */
     
     // Add helper text
     const helpText = this.add.text(width / 2, height / 2 + 200, 'CLICK ANY BUTTON OR PRESS R/SPACE/ENTER', {
@@ -894,6 +938,11 @@ export class GameScene extends Phaser.Scene {
     window.location.reload() // Preserve the important restart fix
   }
   
+  /**
+   * TEMPORARY: Login and scores navigation temporarily disabled for frontend
+   * TODO: Uncomment the following methods to restore navigation functionality
+   */
+  /*
   private goToLogin(): void {
     console.log('Navigating to login...')
     // For now, go to start scene where login functionality exists
@@ -904,14 +953,16 @@ export class GameScene extends Phaser.Scene {
     console.log('Navigating to scores...')
     this.scene.start('ScoresScene')
   }
+  */
   
   /**
-   * Show top 3 personal scores on game over screen
+   * Show top 3 personal scores plus current game's score on game over screen
    */
-  private showTopPersonalScores(width: number, height: number): void {
-    const topScores = ScoreManager.getTopScores(3)
+  private showTopPersonalScores(width: number, height: number, currentScore: GameScore): void {
+    const allScores = ScoreManager.getAllScores().sort((a, b) => b.score - a.score)
+    const topScores = allScores.slice(0, 3)
     
-    if (topScores.length > 0) {
+    if (allScores.length > 0) {
       const topScoresText = this.add.text(width / 2, height / 2 + 35, 'YOUR TOP SCORES:', {
         fontFamily: typography.primary,
         fontSize: '10px',
@@ -921,21 +972,53 @@ export class GameScene extends Phaser.Scene {
       topScoresText.setOrigin(0.5)
       topScoresText.setScrollFactor(0)
       
+      // Display top 3 scores
       topScores.forEach((score, index) => {
+        const isCurrentGame = score.timestamp === currentScore.timestamp
+        const textColor = isCurrentGame ? colors.accent : '#CCCCCC'  // Highlight current game
+        
         const scoreEntry = this.add.text(
           width / 2, 
           height / 2 + 50 + (index * 12), 
-          `${index + 1}. ${score.score} pts (${score.distance}m)`, 
+          `${index + 1}. ${score.score} pts (${score.distance}m)${isCurrentGame ? ' ← Latest' : ''}`, 
           {
             fontFamily: typography.primary,
             fontSize: '9px',
-            color: colors.accent,
+            color: textColor,
             align: 'center'
           }
         )
         scoreEntry.setOrigin(0.5)
         scoreEntry.setScrollFactor(0)
       })
+      
+      // If current game is not in top 3, show it separately
+      const currentGameRank = allScores.findIndex(s => s.timestamp === currentScore.timestamp) + 1
+      if (currentGameRank > 3) {
+        const currentGameEntry = this.add.text(
+          width / 2, 
+          height / 2 + 50 + (3 * 12) + 6, // Extra spacing
+          `${currentGameRank}. ${currentScore.score} pts (${currentScore.distance}m) ← Latest`, 
+          {
+            fontFamily: typography.primary,
+            fontSize: '9px',
+            color: colors.accent,  // Highlighted color for current game
+            align: 'center'
+          }
+        )
+        currentGameEntry.setOrigin(0.5)
+        currentGameEntry.setScrollFactor(0)
+      }
+    } else {
+      // Show "No previous scores" if this is the first game
+      const noScoresText = this.add.text(width / 2, height / 2 + 50, 'No previous scores\nThis is your first game!', {
+        fontFamily: typography.primary,
+        fontSize: '9px',
+        color: colors.white,
+        align: 'center'
+      })
+      noScoresText.setOrigin(0.5)
+      noScoresText.setScrollFactor(0)
     }
   }
 } 

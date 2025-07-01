@@ -83,6 +83,9 @@ export class PaperPlane extends Phaser.Physics.Arcade.Sprite {
     
     const body = this.body as Phaser.Physics.Arcade.Body
     
+    // Check for top boundary collision and handle bounce
+    this.checkTopBoundaryCollision()
+    
     // Maintain constant forward speed
     body.setVelocityX(this.forwardSpeed)
     
@@ -127,6 +130,33 @@ export class PaperPlane extends Phaser.Physics.Arcade.Sprite {
     }
     
     return crashed
+  }
+ 
+  /**
+   * Check for top boundary collision and handle bounce
+   */
+  private checkTopBoundaryCollision(): void {
+    const scene = this.scene as any
+    const screenHeight = scene.cameras.main.height
+    
+    // Check if plane has hit or exceeded the top boundary
+    if (this.y <= 0) {
+      this.handleTopBoundaryBounce(screenHeight)
+    }
+  }
+
+  /**
+   * Handle top boundary collision with immediate bounce down
+   */
+  private handleTopBoundaryBounce(screenHeight: number): void {
+    // Calculate 5% of screen height for bounce distance
+    const bounceDistance = screenHeight * 0.25
+    
+    // Immediately position the plane 5% down from the top edge
+    this.y = bounceDistance
+    
+    // Note: We don't set hasCrashedFlag as this is a non-punitive bounce
+    // Note: We don't modify velocity to maintain existing physics behavior
   }
 
   /**

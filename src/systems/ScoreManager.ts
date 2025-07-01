@@ -8,23 +8,15 @@ import {
   getFirestore, 
   collection, 
   doc, 
-  setDoc, 
-  getDoc, 
   getDocs, 
   query, 
   where, 
   orderBy, 
   limit,
-  addDoc,
-  serverTimestamp,
-  writeBatch,
-  onSnapshot,
-  enableNetwork,
-  disableNetwork
+  writeBatch
 } from 'firebase/firestore'
-import type { Firestore, QuerySnapshot, DocumentData, Timestamp } from 'firebase/firestore'
+import type { Firestore } from 'firebase/firestore'
 import { AuthManager } from './AuthManager'
-import type { User } from './AuthManager'
 
 export interface GameScore {
   score: number
@@ -169,42 +161,7 @@ export class ScoreManager {
     this.saveToStorage(updatedScores)
   }
 
-  /**
-   * Save score to Firestore
-   */
-  private static async saveScoreToFirestore(score: GameScore): Promise<GameScore | null> {
-    if (!this.firestore || !this.isOnline) {
-      return null
-    }
 
-    const user = this.authManager.getCurrentUser()
-    if (!user || user.isGuest) {
-      return null // Only save to Firestore for authenticated users
-    }
-
-    try {
-      const scoreData = {
-        score: score.score,
-        distance: score.distance,
-        timestamp: new Date(score.timestamp),
-        userId: user.id,
-        gameMode: score.gameMode || 'normal',
-        sessionId: score.sessionId
-      }
-
-      const docRef = await addDoc(collection(this.firestore, 'scores'), scoreData)
-      
-      return {
-        ...score,
-        id: docRef.id,
-        userId: user.id,
-        syncedToCloud: true
-      }
-    } catch (error) {
-      console.warn('ScoreManager: Failed to save score to Firestore:', error)
-      return null
-    }
-  }
 
   /**
    * Load scores from Firestore for current user
@@ -479,9 +436,6 @@ export class ScoreManager {
    * Save a new score to localStorage, session, and Firebase
    */
   public static async saveScore(score: number, distance: number, gameMode: string = 'normal'): Promise<GameScore> {
-    // Initialize Firestore if needed
-    await this.initializeFirestore()
-    
     // Validate input
     const validatedScore = this.validateScoreInput(score, distance)
     if (!validatedScore.isValid) {
@@ -497,7 +451,6 @@ export class ScoreManager {
     }
     
     const session = this.initializeSession()
-    const user = this.authManager.getCurrentUser()
     
     const newScore: GameScore = {
       score: validatedScore.score,
@@ -505,7 +458,6 @@ export class ScoreManager {
       timestamp: Date.now(),
       sessionId: session.sessionId,
       gameMode,
-      userId: user?.id,
       syncedToCloud: false
     }
     
@@ -513,7 +465,7 @@ export class ScoreManager {
     session.scores.push(newScore)
     this.saveSessionData()
     
-    // Save to persistent storage first (ensures we don't lose the score)
+    // Save to persistent storage (local only)
     const scores = this.getAllScores()
     scores.push(newScore)
     
@@ -531,23 +483,7 @@ export class ScoreManager {
     this.saveToStorage(rankedScores)
     
     // Get the saved score with its rank
-    let savedScore = rankedScores.find(s => s.timestamp === newScore.timestamp) || newScore
-    
-    // Try to save to Firestore for authenticated users
-    if (user && !user.isGuest) {
-      const cloudScore = await this.saveScoreToFirestore(savedScore)
-      if (cloudScore) {
-        // Update local storage with cloud sync info
-        savedScore = cloudScore
-        const updatedScores = rankedScores.map(s => 
-          s.timestamp === savedScore.timestamp ? savedScore : s
-        )
-        this.saveToStorage(updatedScores)
-      } else {
-        // Add to pending sync if save failed
-        this.pendingSyncScores.push(savedScore)
-      }
-    }
+    const savedScore = rankedScores.find(s => s.timestamp === newScore.timestamp) || newScore
     
     return savedScore
   }

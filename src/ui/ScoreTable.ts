@@ -14,6 +14,8 @@ export interface ScoreTableConfig {
   maxRows?: number
   showRank?: boolean
   title?: string
+  rankOffset?: number  // Starting rank number for pagination
+  latestScoreTimestamp?: number  // Timestamp of latest score to highlight
 }
 
 export class ScoreTable {
@@ -32,7 +34,9 @@ export class ScoreTable {
       scores,
       maxRows = 5,
       showRank = true,
-      title
+      title,
+      rankOffset = 0,
+      latestScoreTimestamp
     } = config
     
     this.container = scene.add.container(x, y)
@@ -43,7 +47,7 @@ export class ScoreTable {
     
     this.drawBackground(width, height)
     this.createTitle(title)
-    this.createTable(scores, height, maxRows, showRank)
+    this.createTable(scores, height, maxRows, showRank, rankOffset, latestScoreTimestamp)
   }
   
   private drawBackground(width: number, height: number): void {
@@ -73,18 +77,25 @@ export class ScoreTable {
     this.container.add(this.titleText)
   }
   
-  private createTable(scores: GameScore[], height: number, maxRows: number, showRank: boolean): void {
+  private createTable(scores: GameScore[], height: number, maxRows: number, showRank: boolean, rankOffset: number = 0, latestScoreTimestamp?: number): void {
     const displayScores = scores.slice(0, maxRows)
-    const startY = this.titleText ? -height/2 + 80 : -height/2 + 50
-    const rowHeight = 35
+    // Better spacing calculations for 5 rows with adequate padding
+    const topPadding = 30
+    const bottomPadding = 25  // Increased bottom padding
+    const headerHeight = 25
+    const availableSpace = height - topPadding - bottomPadding - headerHeight
+    const rowHeight = Math.min(30, availableSpace / maxRows)  // Responsive row height
+    
+    const startY = -height/2 + topPadding + headerHeight
     
     // Create headers
-    this.createHeaders(startY - 20, showRank)
+    this.createHeaders(startY - headerHeight, showRank)
     
     // Create score rows
     displayScores.forEach((score, index) => {
       const y = startY + (index * rowHeight)
-      this.createScoreRow(score, y, index + 1, showRank)
+      const globalRank = rankOffset + index + 1
+      this.createScoreRow(score, y, globalRank, showRank, latestScoreTimestamp)
     })
     
     // If no scores, show empty message
@@ -127,12 +138,17 @@ export class ScoreTable {
     this.headerTexts.push(distanceHeader)
   }
   
-  private createScoreRow(score: GameScore, y: number, displayRank: number, showRank: boolean): void {
-    // Determine color for this rank
+  private createScoreRow(score: GameScore, y: number, globalRank: number, showRank: boolean, latestScoreTimestamp?: number): void {
+    // Determine if this is the latest score
+    const isLatestScore = latestScoreTimestamp && score.timestamp === latestScoreTimestamp
+    
+    // Determine color for this rank - latest score gets priority highlighting
     let textColor: string = colors.white
-    if (displayRank <= 3) {
+    if (isLatestScore) {
+      textColor = colors.accent  // Highlight latest score in accent color
+    } else if (globalRank <= 3) {
       const highlightColors = [colors.accent, '#C0C0C0', '#CD7F32'] // Gold, Silver, Bronze
-      textColor = highlightColors[displayRank - 1] || colors.white
+      textColor = highlightColors[globalRank - 1] || colors.white
     }
     
     const rowStyle = {
@@ -143,7 +159,7 @@ export class ScoreTable {
     }
     
     if (showRank) {
-      const rankText = this.container.scene.add.text(-150, y, `${displayRank}`, rowStyle)
+      const rankText = this.container.scene.add.text(-150, y, `${globalRank}`, rowStyle)
       rankText.setOrigin(0.5, 0.5)
       this.container.add(rankText)
       this.scoreTexts.push(rankText)
@@ -154,7 +170,8 @@ export class ScoreTable {
     this.container.add(scoreText)
     this.scoreTexts.push(scoreText)
     
-    const distanceText = this.container.scene.add.text(showRank ? 150 : 60, y, `${score.distance}m`, rowStyle)
+    const distanceDisplay = `${score.distance}m${isLatestScore ? ' ← Latest' : ''}`
+    const distanceText = this.container.scene.add.text(showRank ? 150 : 60, y, distanceDisplay, rowStyle)
     distanceText.setOrigin(0.5, 0.5)
     this.container.add(distanceText)
     this.scoreTexts.push(distanceText)
@@ -164,19 +181,26 @@ export class ScoreTable {
     return 300 // Default height, could be calculated based on content
   }
   
-  public updateScores(scores: GameScore[], maxRows: number = 5, showRank: boolean = true): void {
+  public updateScores(scores: GameScore[], maxRows: number = 5, showRank: boolean = true, rankOffset: number = 0, latestScoreTimestamp?: number): void {
     // Clear existing score texts
     this.scoreTexts.forEach(text => text.destroy())
     this.scoreTexts = []
     
-    // Recreate table with new scores
+    // Recreate table with new scores using same improved spacing as createTable
     const displayScores = scores.slice(0, maxRows)
-    const startY = this.titleText ? -this.getTableHeight()/2 + 80 : -this.getTableHeight()/2 + 50
-    const rowHeight = 35
+    const height = this.getTableHeight()
+    const topPadding = 30
+    const bottomPadding = 25  // Increased bottom padding
+    const headerHeight = 25
+    const availableSpace = height - topPadding - bottomPadding - headerHeight
+    const rowHeight = Math.min(30, availableSpace / maxRows)  // Responsive row height
+    
+    const startY = -height/2 + topPadding + headerHeight
     
     displayScores.forEach((score, index) => {
       const y = startY + (index * rowHeight)
-      this.createScoreRow(score, y, index + 1, showRank)
+      const globalRank = rankOffset + index + 1
+      this.createScoreRow(score, y, globalRank, showRank, latestScoreTimestamp)
     })
     
     if (displayScores.length === 0) {

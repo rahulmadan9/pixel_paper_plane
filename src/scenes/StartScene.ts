@@ -3,19 +3,21 @@
  * 
  * Provides:
  * - Branded start screen with game title
- * - Authentication-aware navigation buttons
+ * - Authentication-aware navigation buttons (TEMPORARILY DISABLED)
  * - Consistent visual design with game background
  */
 
 import { colors, typography } from '../ui/DesignTokens'
 import { AuthManager } from '../systems/AuthManager'
-import type { User } from '../systems/AuthManager'
+// import type { User } from '../systems/AuthManager' // Unused import
 
 export class StartScene extends Phaser.Scene {
   private titleText!: Phaser.GameObjects.Text
-  private authButton!: Phaser.GameObjects.Container
-  private secondaryButton!: Phaser.GameObjects.Container
-  private userStatusText!: Phaser.GameObjects.Text
+  // TEMPORARY: Authentication UI temporarily disabled for frontend
+  // TODO: Uncomment the following lines to restore authentication UI
+  // private authButton!: Phaser.GameObjects.Container
+  // private secondaryButton!: Phaser.GameObjects.Container
+  // private userStatusText!: Phaser.GameObjects.Text
   
   private authManager: AuthManager
   
@@ -46,15 +48,21 @@ export class StartScene extends Phaser.Scene {
     
     this.createBackground(width, height)
     this.createTitle(width, height)
-    this.createUserStatus(width, height)
+    // TEMPORARY: Authentication UI temporarily disabled for frontend
+    // TODO: Uncomment the following lines to restore authentication functionality
+    // this.createUserStatus(width, height)
     this.createButtons(width, height)
-    this.updateButtonsForAuthState()
+    // this.updateButtonsForAuthState()
     
-    // Listen for authentication state changes
+    // Listen for authentication state changes (backend still functional)
+    // TEMPORARY: UI updates disabled for frontend
+    // TODO: Uncomment the following block to restore authentication UI updates
+    /*
     this.authManager.onAuthStateChanged((user) => {
       this.updateButtonsForAuthState()
       this.updateUserStatus(user)
     })
+    */
   }
   
   /**
@@ -177,7 +185,10 @@ export class StartScene extends Phaser.Scene {
   
   /**
    * Create user status display
+   * TEMPORARY: This method is temporarily disabled for frontend
+   * TODO: Uncomment this entire method to restore user status display
    */
+  /*
   private createUserStatus(width: number, height: number): void {
     this.userStatusText = this.add.text(width / 2, height * 0.43, '', {
       fontFamily: typography.primary,
@@ -194,10 +205,14 @@ export class StartScene extends Phaser.Scene {
     // Update initial status
     this.updateUserStatus(this.authManager.getCurrentUser())
   }
+  */
   
   /**
    * Update user status text based on authentication state
+   * TEMPORARY: This method is temporarily disabled for frontend
+   * TODO: Uncomment this entire method to restore user status updates
    */
+  /*
   private updateUserStatus(user: User | null): void {
     if (!user) {
       this.userStatusText.setText('Guest Mode • Scores saved locally')
@@ -207,9 +222,11 @@ export class StartScene extends Phaser.Scene {
       this.userStatusText.setText(`Welcome back, ${user.displayName || user.email}!`)
     }
   }
+  */
   
   /**
    * Create navigation buttons with authentication-aware layout
+   * TEMPORARY: Only START GAME button is shown, authentication buttons are disabled
    */
   private createButtons(width: number, height: number): void {
     // Primary action button - START GAME (always visible) with enhanced styling
@@ -222,6 +239,18 @@ export class StartScene extends Phaser.Scene {
       { primary: true }
     )
     
+    // VIEW SCORES button - Now works without authentication
+    this.createButton(
+      width / 2,
+      height * 0.71,
+      'VIEW SCORES',
+      '#666666',
+      () => this.showScores()
+    )
+    
+    // TEMPORARY: Authentication buttons temporarily disabled for frontend
+    // TODO: Uncomment the following blocks to restore authentication UI if needed
+    /*
     // Secondary button - Authentication-aware
     this.authButton = this.createButton(
       width / 2,
@@ -239,11 +268,15 @@ export class StartScene extends Phaser.Scene {
       '#666666',
       () => this.showScores()
     )
+    */
   }
   
   /**
    * Update button visibility and text based on authentication state
+   * TEMPORARY: This method is temporarily disabled for frontend
+   * TODO: Uncomment this entire method to restore authentication button updates
    */
+  /*
   private updateButtonsForAuthState(): void {
     const user = this.authManager.getCurrentUser()
     
@@ -274,18 +307,26 @@ export class StartScene extends Phaser.Scene {
       this.secondaryButton.on('pointerdown', () => this.logout())
     }
   }
+  */
   
   /**
    * Update button text
+   * TEMPORARY: This method is temporarily disabled for frontend
+   * TODO: Uncomment this entire method to restore button text updates
    */
+  /*
   private updateButtonText(button: Phaser.GameObjects.Container, newText: string): void {
     const textObject = button.list[1] as Phaser.GameObjects.Text
     textObject.setText(newText)
   }
+  */
   
   /**
    * Update button color
+   * TEMPORARY: This method is temporarily disabled for frontend
+   * TODO: Uncomment this entire method to restore button color updates
    */
+  /*
   private updateButtonColor(button: Phaser.GameObjects.Container, newColor: string): void {
     const bg = button.list[0] as Phaser.GameObjects.Graphics
     bg.clear()
@@ -298,6 +339,90 @@ export class StartScene extends Phaser.Scene {
     bg.fillRoundedRect(-buttonWidth/2, -buttonHeight/2, buttonWidth, buttonHeight, 8)
     bg.strokeRoundedRect(-buttonWidth/2, -buttonHeight/2, buttonWidth, buttonHeight, 8)
   }
+  */
+  
+  /**
+   * Start the game
+   */
+  private startGame(): void {
+    console.log('Starting game...')
+    
+    // Create guest user if not authenticated
+    if (!this.authManager.isAuthenticated()) {
+      this.authManager.createGuestUser().then(() => {
+        console.log('Created guest user for this session')
+      })
+    }
+    
+    // Set flag to start game directly after reload
+    localStorage.setItem('startGameDirectly', 'true')
+    
+    // Reload to prevent asset glitching (important fix)
+    window.location.reload()
+  }
+  
+  /**
+   * Handle authentication action based on current state
+   * TEMPORARY: This method is temporarily disabled for frontend
+   * TODO: Uncomment this entire method to restore authentication actions
+   */
+  /*
+  private handleAuthAction(): void {
+    const user = this.authManager.getCurrentUser()
+    
+    if (!user) {
+      this.showLogin()
+    } else if (user.isGuest) {
+      this.upgradeGuestAccount()
+    } else {
+      this.showScores()
+    }
+  }
+  */
+  
+  /**
+   * Show login screen
+   * TEMPORARY: This method is temporarily disabled for frontend
+   * TODO: Uncomment this entire method to restore login navigation
+   */
+  /*
+  private showLogin(): void {
+    console.log('Navigating to login...')
+    this.scene.start('LoginScene')
+  }
+  */
+  
+  /**
+   * Upgrade guest account to full account
+   * TEMPORARY: This method is temporarily disabled for frontend
+   * TODO: Uncomment this entire method to restore account upgrade functionality
+   */
+  /*
+  private upgradeGuestAccount(): void {
+    console.log('Navigating to account upgrade...')
+    this.scene.start('LoginScene', { upgrade: true })
+  }
+  */
+  
+  /**
+   * Show scores screen - Now works without authentication
+   */
+  private showScores(): void {
+    console.log('Navigating to scores screen...')
+    this.scene.start('ScoresScene')
+  }
+  
+  /**
+   * Logout current user
+   * TEMPORARY: This method is temporarily disabled for frontend
+   * TODO: Uncomment this entire method to restore logout functionality
+   */
+  /*
+  private logout(): void {
+    this.authManager.logout()
+    console.log('User logged out')
+  }
+  */
   
   /**
    * Create a styled button container with enhanced visual effects
@@ -369,79 +494,5 @@ export class StartScene extends Phaser.Scene {
     shadowContainer.setDepth(-1)
     
     return container
-  }
-  
-  /**
-   * Start the game
-   */
-  private startGame(): void {
-    console.log('Starting game...')
-    
-    // Create guest user if not authenticated
-    if (!this.authManager.isAuthenticated()) {
-      this.authManager.createGuestUser().then(() => {
-        console.log('Created guest user for this session')
-      })
-    }
-    
-    // Set flag to start game directly after reload
-    localStorage.setItem('startGameDirectly', 'true')
-    
-    // Reload to prevent asset glitching (important fix)
-    window.location.reload()
-  }
-  
-  /**
-   * Handle authentication action based on current state
-   */
-  private handleAuthAction(): void {
-    const user = this.authManager.getCurrentUser()
-    
-    if (!user) {
-      this.showLogin()
-    } else if (user.isGuest) {
-      this.upgradeGuestAccount()
-    } else {
-      this.showScores()
-    }
-  }
-  
-  /**
-   * Show login screen
-   */
-  private showLogin(): void {
-    console.log('Navigating to login...')
-    this.scene.start('LoginScene')
-  }
-  
-  /**
-   * Upgrade guest account to full account
-   */
-  private upgradeGuestAccount(): void {
-    console.log('Navigating to account upgrade...')
-    this.scene.start('LoginScene', { upgrade: true })
-  }
-  
-  /**
-   * Show scores screen
-   */
-  private showScores(): void {
-    console.log('Navigating to scores screen...')
-    
-    // Check if user is authenticated before showing scores
-    if (!this.authManager.isAuthenticated()) {
-      console.warn('User must be authenticated to view scores')
-      return
-    }
-    
-    this.scene.start('ScoresScene')
-  }
-  
-  /**
-   * Logout current user
-   */
-  private logout(): void {
-    this.authManager.logout()
-    console.log('User logged out')
   }
 } 
