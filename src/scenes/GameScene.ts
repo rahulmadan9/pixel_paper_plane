@@ -658,24 +658,29 @@ export class GameScene extends Phaser.Scene {
     // Calculate final score and save it
     const finalScore = this.score + Math.floor(this.distance)
     
-    // Use the sync version for immediate response, async version for cloud sync
-    const tempScore = ScoreManager.saveSyncScore(finalScore, Math.floor(this.distance), 'normal')
-    
     console.log(`Game ended! Final Score: ${finalScore}, Distance: ${Math.floor(this.distance)}m`)
-    console.log(`Score saved with rank: ${tempScore.rank}`)
     
     // Stop camera and show game over screen immediately
     this.cameras.main.stopFollow()
     this.cameras.main.setScroll(this.cameras.main.scrollX, this.cameras.main.scrollY)
     
-    this.showGameOverScreen(tempScore)
-    
-    // Save to cloud in background
+    // Save score and show game over screen
     try {
       const savedScore = await ScoreManager.saveScore(finalScore, Math.floor(this.distance), 'normal')
-      console.log(`Score synced to cloud with rank: ${savedScore.rank}`)
+      console.log(`Score saved with rank: ${savedScore.rank}`)
+      this.showGameOverScreen(savedScore)
     } catch (error) {
-      console.warn('Failed to sync score to cloud:', error)
+      console.warn('Failed to save score:', error)
+      // Show game over screen with a basic score object if save fails
+      const basicScore = {
+        score: finalScore,
+        distance: Math.floor(this.distance),
+        timestamp: Date.now(),
+        rank: 0,
+        gameMode: 'normal',
+        syncedToCloud: false
+      }
+      this.showGameOverScreen(basicScore)
     }
   }
 
@@ -772,30 +777,7 @@ export class GameScene extends Phaser.Scene {
    * Create authentication-aware UI elements
    */
   private createAuthAwareUI(width: number, height: number, currentUser: any): void {
-    let statusMessage = ''
-    let statusColor: string = colors.white
-    
-    if (!currentUser) {
-      statusMessage = 'Guest Mode • Scores saved locally only'
-      statusColor = colors.accent
-    } else if (currentUser.isGuest) {
-      statusMessage = `${currentUser.displayName} • Create account to save scores online!`
-      statusColor = colors.accent
-    } else {
-      statusMessage = `${currentUser.displayName || currentUser.email} • Score saved to your account`
-      statusColor = colors.white
-    }
-    
-    const statusText = this.add.text(width / 2, height / 2 + 15, statusMessage, {
-      fontFamily: typography.primary,
-      fontSize: '10px',
-      color: statusColor,
-      align: 'center',
-      backgroundColor: colors.primary + '40',
-      padding: { x: 8, y: 4 }
-    })
-    statusText.setOrigin(0.5)
-    statusText.setScrollFactor(0)
+    // UI elements removed - no status message needed on game over screen
   }
   
   /**
