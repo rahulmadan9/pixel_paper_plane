@@ -227,7 +227,7 @@ export const ASSET_TEST_CONFIGURATIONS = {
     backgroundCleanupDistance: 1200, // More aggressive background cleanup
     
     enableSceneCleanup: true,
-    enableProperRestart: true,
+    enableProperRestart: false,  // Use page reload as band-aid fix
     
     maxGroundDecorations: 200,  // Lower limits for production
     maxRings: 20,
@@ -255,7 +255,7 @@ export const ASSET_TEST_CONFIGURATIONS = {
     backgroundCleanupDistance: 500,  // Very aggressive background cleanup
     
     enableSceneCleanup: true,
-    enableProperRestart: true,
+    enableProperRestart: false,  // Use page reload as band-aid fix
     
     maxGroundDecorations: 50,   // Extremely low limits
     maxRings: 5,
