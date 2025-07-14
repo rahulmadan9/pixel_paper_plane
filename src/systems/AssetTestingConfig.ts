@@ -233,6 +233,34 @@ export const ASSET_TEST_CONFIGURATIONS = {
     maxRings: 20,
     maxClouds: 10,
     maxBackgroundSections: 3
+  } as AssetCleanupConfig,
+
+  /**
+   * ULTRA_AGGRESSIVE - Emergency mode for problematic devices
+   * Extremely aggressive cleanup for devices still experiencing glitching
+   */
+  ULTRA_AGGRESSIVE: {
+    enableDebugLogging: true,
+    enableAssetCounting: true,
+    logInterval: 3000,        // Very frequent logging
+    
+    enableGroundDecorationCleanup: true,
+    groundCleanupDistance: 400,  // Extremely close to camera
+    
+    enableRingCleanup: true,
+    enableCloudCleanup: true,
+    gameObjectCleanupDistance: 300,  // Extremely aggressive
+    
+    enableBackgroundCleanup: true,
+    backgroundCleanupDistance: 500,  // Very aggressive background cleanup
+    
+    enableSceneCleanup: true,
+    enableProperRestart: true,
+    
+    maxGroundDecorations: 50,   // Extremely low limits
+    maxRings: 5,
+    maxClouds: 3,
+    maxBackgroundSections: 1
   } as AssetCleanupConfig
 }
 
@@ -253,11 +281,65 @@ export class EnvironmentDetector {
     return indicators.some(indicator => indicator)
   }
   
+  public static isProblematicDevice(): boolean {
+    // Detect devices/browsers that might need ultra-aggressive cleanup
+    const userAgent = navigator.userAgent.toLowerCase()
+    const problematicIndicators = [
+      // Mobile devices with limited memory
+      /android.*chrome.*mobile/i.test(userAgent),
+      /iphone.*safari/i.test(userAgent),
+      /ipad.*safari/i.test(userAgent),
+      // Older browsers
+      /chrome\/[6-8][0-9]\./i.test(userAgent), // Chrome 60-89
+      /firefox\/[6-8][0-9]\./i.test(userAgent), // Firefox 60-89
+      // Low memory indicators
+      navigator.hardwareConcurrency && navigator.hardwareConcurrency <= 4,
+      (navigator as any).deviceMemory && (navigator as any).deviceMemory <= 4, // 4GB or less
+      // WebGL limitations
+      this.hasWebGLLimitations()
+    ]
+    
+    return problematicIndicators.some(indicator => indicator)
+  }
+  
+  private static hasWebGLLimitations(): boolean {
+    try {
+      const canvas = document.createElement('canvas')
+      const gl = canvas.getContext('webgl') || canvas.getContext('experimental-webgl')
+      if (!gl) return true
+      
+      const webglContext = gl as WebGLRenderingContext
+      const maxTextures = webglContext.getParameter(webglContext.MAX_TEXTURE_IMAGE_UNITS)
+      const maxTextureSize = webglContext.getParameter(webglContext.MAX_TEXTURE_SIZE)
+      
+      // Consider limited if less than 16 texture units or 2048 max texture size
+      return maxTextures < 16 || maxTextureSize < 2048
+    } catch (e) {
+      return true // Assume limitations if we can't check
+    }
+  }
+  
   public static getRecommendedConfiguration(): keyof typeof ASSET_TEST_CONFIGURATIONS {
     if (this.isProduction()) {
+      if (this.isProblematicDevice()) {
+        console.warn('🚨 Problematic device detected - using ULTRA_AGGRESSIVE cleanup')
+        return 'ULTRA_AGGRESSIVE'
+      }
       return 'PRODUCTION_AGGRESSIVE'
     }
     return 'STAGE_1_GROUND_CLEANUP'  // Conservative default for local development
+  }
+  
+  public static logDeviceInfo(): void {
+    console.log('📱 Device Information:', {
+      userAgent: navigator.userAgent,
+      hardwareConcurrency: navigator.hardwareConcurrency,
+      deviceMemory: (navigator as any).deviceMemory,
+      platform: navigator.platform,
+      screenSize: `${screen.width}x${screen.height}`,
+      devicePixelRatio: window.devicePixelRatio,
+      isProblematic: this.isProblematicDevice()
+    })
   }
 }
 
@@ -328,6 +410,11 @@ declare global {
       getAvailableStages: () => string[]
       autoConfigureForEnvironment: () => void
       isProduction: () => boolean
+      isProblematicDevice: () => boolean
+      logDeviceInfo: () => void
+      enableUltraAggressive: () => void
+      enableEmergencyMode: () => void
+      logTestResults?: () => void
     }
   }
 }
@@ -339,6 +426,15 @@ if (typeof window !== 'undefined') {
     getCurrentStage: AssetTestingSwitcher.getCurrentStage.bind(AssetTestingSwitcher),
     getAvailableStages: AssetTestingSwitcher.getAvailableStages.bind(AssetTestingSwitcher),
     autoConfigureForEnvironment: AssetTestingSwitcher.autoConfigureForEnvironment.bind(AssetTestingSwitcher),
-    isProduction: EnvironmentDetector.isProduction.bind(EnvironmentDetector)
+    isProduction: EnvironmentDetector.isProduction.bind(EnvironmentDetector),
+    isProblematicDevice: EnvironmentDetector.isProblematicDevice.bind(EnvironmentDetector),
+    logDeviceInfo: EnvironmentDetector.logDeviceInfo.bind(EnvironmentDetector),
+    // Quick emergency modes
+    enableUltraAggressive: () => AssetTestingSwitcher.setStage('ULTRA_AGGRESSIVE'),
+    enableEmergencyMode: () => {
+      console.log('🚨 ACTIVATING EMERGENCY MODE')
+      EnvironmentDetector.logDeviceInfo()
+      AssetTestingSwitcher.setStage('ULTRA_AGGRESSIVE')
+    }
   }
 }

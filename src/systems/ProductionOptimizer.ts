@@ -253,18 +253,26 @@ export class ProductionAssetOptimizer {
 export function initializeProductionOptimizations(): void {
   if (EnvironmentDetector.isProduction()) {
     console.log('🚀 Production environment detected')
-    console.log('📋 Applying aggressive asset cleanup configuration')
+    
+    // Log device information for debugging
+    EnvironmentDetector.logDeviceInfo()
+    
+    // Auto-configure based on device capabilities
+    const recommendedStage = EnvironmentDetector.getRecommendedConfiguration()
+    console.log(`📋 Applying ${recommendedStage} asset cleanup configuration`)
     
     // Apply production configuration immediately
-    AssetTestingSwitcher.setStage('PRODUCTION_AGGRESSIVE')
+    AssetTestingSwitcher.setStage(recommendedStage)
     
     // Log production-specific instructions
     console.log('')
     console.log('🔧 Production Debugging Commands:')
+    console.log('• window.assetTest.enableEmergencyMode() - Activate ultra-aggressive cleanup')
+    console.log('• window.assetTest.logDeviceInfo() - Check device capabilities')
     console.log('• window.assetTest.setStage("BASELINE") - Test without cleanup')
-    console.log('• window.assetTest.setStage("PRODUCTION_AGGRESSIVE") - Restore aggressive cleanup')
+    console.log('• window.assetTest.setStage("ULTRA_AGGRESSIVE") - Force emergency mode')
     console.log('• window.assetTest.logTestResults() - Check current asset status')
-    console.log('• window.assetTest.isProduction() - Verify environment detection')
+    console.log('• window.emergencyDiagnostics.inspectPhaser(scene) - Deep diagnostic')
     console.log('')
     
     // Initialize production optimizations
