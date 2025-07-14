@@ -5,7 +5,8 @@
  * of persistent asset glitching in production environments.
  */
 
-import { EnvironmentDetector } from './AssetTestingConfig'
+// Environment detection will be used for production optimizations
+// import { EnvironmentDetector } from './AssetTestingConfig'
 
 /**
  * Phaser-specific diagnostic tools
@@ -27,8 +28,6 @@ export class PhaserDiagnostics {
     console.log('🎮 Game State:', {
       isBooted: game.isBooted,
       isRunning: game.isRunning,
-      hasStarted: game.hasStarted,
-      pendingDestroy: game.pendingDestroy,
       rendererType: renderer.type === 0 ? 'Canvas' : 'WebGL',
       width: game.config.width,
       height: game.config.height
@@ -83,12 +82,13 @@ export class PhaserDiagnostics {
       childrenByType.set(type, (childrenByType.get(type) || 0) + 1)
       
       // Check for problematic states
-      if (!child.texture || child.texture.key === '__MISSING') {
+      const childWithTexture = child as any
+      if (childWithTexture.texture && (!childWithTexture.texture || childWithTexture.texture.key === '__MISSING')) {
         problematicObjects.push({
           type,
-          key: (child as any).texture?.key || 'unknown',
-          x: (child as any).x,
-          y: (child as any).y,
+          key: childWithTexture.texture?.key || 'unknown',
+          x: childWithTexture.x,
+          y: childWithTexture.y,
           issue: 'Missing texture'
         })
       }
