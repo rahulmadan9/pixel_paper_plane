@@ -7,6 +7,7 @@ import { ScoreManager } from '../systems/ScoreManager'
 import { AuthManager } from '../systems/AuthManager'
 import type { GameScore } from '../systems/ScoreManager'
 import { AssetCleanupManager, AssetCounter } from '@systems/AssetCleanupConfig'
+import { ProductionAssetOptimizer, WebGLOptimizer } from '@systems/ProductionOptimizer'
 
 /**
  * GameScene - Main gameplay scene
@@ -79,6 +80,9 @@ export class GameScene extends Phaser.Scene {
     this.setupInput()
     this.setupUI()
     this.spawnInitialContent()
+    
+    // Initialize production optimizations for this scene
+    ProductionAssetOptimizer.initialize(this)
   }
 
   /**
@@ -117,6 +121,9 @@ export class GameScene extends Phaser.Scene {
     // Track background section for cleanup
     this.backgroundSections.push(graphics)
     this.assetCounter.increment('background', startX)
+    
+    // Track texture usage for WebGL monitoring
+    WebGLOptimizer.trackTexture(`background-${startX}`, 2048)
     
     this.cleanupManager.logDebug(`Created background section at x=${startX}, total: ${this.backgroundSections.length}`)
   }
@@ -220,6 +227,9 @@ export class GameScene extends Phaser.Scene {
     // Track tree for cleanup
     this.groundDecorations.push(tree)
     this.assetCounter.increment('tree', treeX)
+    
+    // Track texture usage
+    WebGLOptimizer.trackTexture(spriteKey, 512)
   }
 
   /**
@@ -244,6 +254,9 @@ export class GameScene extends Phaser.Scene {
     // Track bush for cleanup
     this.groundDecorations.push(bush)
     this.assetCounter.increment('bush', bushX)
+    
+    // Track texture usage
+    WebGLOptimizer.trackTexture(spriteKey, 256)
   }
 
   /**
@@ -1211,6 +1224,12 @@ export class GameScene extends Phaser.Scene {
         }
       })
       this.backgroundSections = []
+      
+      // Force texture cleanup for production
+      WebGLOptimizer.forceTextureCleanup(this)
+      
+      // Shutdown production optimizations
+      ProductionAssetOptimizer.shutdown()
       
       // Reset counters
       this.assetCounter.reset()

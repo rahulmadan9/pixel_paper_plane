@@ -205,7 +205,60 @@ export const ASSET_TEST_CONFIGURATIONS = {
     maxRings: 30,
     maxClouds: 15,
     maxBackgroundSections: 5
+  } as AssetCleanupConfig,
+
+  /**
+   * PRODUCTION_AGGRESSIVE - More aggressive cleanup for production deployment
+   * Addresses Vercel/production-specific memory constraints
+   */
+  PRODUCTION_AGGRESSIVE: {
+    enableDebugLogging: true,  // Keep logging for production debugging
+    enableAssetCounting: true, // Keep monitoring for production issues
+    logInterval: 10000,       // More frequent logging
+    
+    enableGroundDecorationCleanup: true,
+    groundCleanupDistance: 1000,  // More aggressive - cleanup closer to camera
+    
+    enableRingCleanup: true,
+    enableCloudCleanup: true,
+    gameObjectCleanupDistance: 800,  // More aggressive cleanup
+    
+    enableBackgroundCleanup: true,
+    backgroundCleanupDistance: 1200, // More aggressive background cleanup
+    
+    enableSceneCleanup: true,
+    enableProperRestart: true,
+    
+    maxGroundDecorations: 200,  // Lower limits for production
+    maxRings: 20,
+    maxClouds: 10,
+    maxBackgroundSections: 3
   } as AssetCleanupConfig
+}
+
+/**
+ * Environment detection and auto-configuration
+ */
+export class EnvironmentDetector {
+  public static isProduction(): boolean {
+    // Check multiple indicators for production environment
+    const indicators = [
+      window.location.hostname.includes('vercel.app'),
+      window.location.hostname.includes('netlify.app'),
+      window.location.protocol === 'https:' && !window.location.hostname.includes('localhost'),
+      process.env.NODE_ENV === 'production',
+      !window.location.hostname.includes('localhost') && !window.location.hostname.includes('127.0.0.1')
+    ]
+    
+    return indicators.some(indicator => indicator)
+  }
+  
+  public static getRecommendedConfiguration(): keyof typeof ASSET_TEST_CONFIGURATIONS {
+    if (this.isProduction()) {
+      return 'PRODUCTION_AGGRESSIVE'
+    }
+    return 'STAGE_1_GROUND_CLEANUP'  // Conservative default for local development
+  }
 }
 
 /**
@@ -229,7 +282,17 @@ export class AssetTestingSwitcher {
       manager.updateConfig(config)
       console.log(`🧪 Switched to test stage: ${stage}`)
       console.log('📋 Active features:', this.getActiveFeatures(config))
+      
+      if (EnvironmentDetector.isProduction()) {
+        console.log('🚀 Production environment detected')
+      }
     })
+  }
+  
+  public static autoConfigureForEnvironment(): void {
+    const recommendedStage = EnvironmentDetector.getRecommendedConfiguration()
+    console.log(`🔧 Auto-configuring for ${EnvironmentDetector.isProduction() ? 'production' : 'development'} environment`)
+    this.setStage(recommendedStage)
   }
   
   public static getCurrentStage(): string {
@@ -263,6 +326,8 @@ declare global {
       setStage: (stage: keyof typeof ASSET_TEST_CONFIGURATIONS) => void
       getCurrentStage: () => string
       getAvailableStages: () => string[]
+      autoConfigureForEnvironment: () => void
+      isProduction: () => boolean
     }
   }
 }
@@ -272,6 +337,8 @@ if (typeof window !== 'undefined') {
   window.assetTest = {
     setStage: AssetTestingSwitcher.setStage.bind(AssetTestingSwitcher),
     getCurrentStage: AssetTestingSwitcher.getCurrentStage.bind(AssetTestingSwitcher),
-    getAvailableStages: AssetTestingSwitcher.getAvailableStages.bind(AssetTestingSwitcher)
+    getAvailableStages: AssetTestingSwitcher.getAvailableStages.bind(AssetTestingSwitcher),
+    autoConfigureForEnvironment: AssetTestingSwitcher.autoConfigureForEnvironment.bind(AssetTestingSwitcher),
+    isProduction: EnvironmentDetector.isProduction.bind(EnvironmentDetector)
   }
 }

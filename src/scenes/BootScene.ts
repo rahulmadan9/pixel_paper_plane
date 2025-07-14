@@ -1,6 +1,6 @@
 import Phaser from 'phaser'
 import { colors } from '@ui/DesignTokens'
-import { initializeAssetTesting } from '@systems/AssetTestSetup'
+import { initializeProductionOptimizations } from '@systems/ProductionOptimizer'
 
 /**
  * BootScene - Handles initial asset loading with progress bar
@@ -449,8 +449,8 @@ export class BootScene extends Phaser.Scene {
    * Start the main game scene
    */
   private startGame(): void {
-    // Initialize asset testing system
-    initializeAssetTesting()
+    // Initialize production optimizations and asset testing
+    initializeProductionOptimizations()
     
     this.time.delayedCall(500, () => {
       this.scene.start('StartScene')
