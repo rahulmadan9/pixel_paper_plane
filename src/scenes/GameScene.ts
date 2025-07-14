@@ -6,6 +6,7 @@ import { colors, typography } from '../ui/DesignTokens'
 import { ScoreManager } from '../systems/ScoreManager'
 import { AuthManager } from '../systems/AuthManager'
 import type { GameScore } from '../systems/ScoreManager'
+import { AssetCleanupManager, AssetCounter } from '@systems/AssetCleanupConfig'
 
 /**
  * GameScene - Main gameplay scene
@@ -38,6 +39,12 @@ export class GameScene extends Phaser.Scene {
   // UI elements
   private scoreText!: Phaser.GameObjects.Text
   private distanceText!: Phaser.GameObjects.Text
+  
+  // Asset tracking and cleanup
+  private cleanupManager!: AssetCleanupManager
+  private assetCounter!: AssetCounter
+  private groundDecorations: Phaser.GameObjects.GameObject[] = []
+  private backgroundSections: Phaser.GameObjects.Graphics[] = []
 
   constructor() {
     super({ key: 'GameScene' })
@@ -50,6 +57,20 @@ export class GameScene extends Phaser.Scene {
     this.isLaunched = false
     this.gameEnded = false
     this.lastCloudX = 0
+    
+    // Initialize asset cleanup system
+    this.cleanupManager = AssetCleanupManager.getInstance()
+    this.assetCounter = AssetCounter.getInstance()
+    
+    // Reset asset tracking arrays
+    this.groundDecorations = []
+    this.backgroundSections = []
+    
+    // Start monitoring
+    this.cleanupManager.startMonitoring()
+    
+    // Apply current test configuration
+    this.cleanupManager.logDebug('GameScene initialized with current test stage')
   }
 
   public create(): void {
@@ -92,6 +113,12 @@ export class GameScene extends Phaser.Scene {
       parseInt(colors.skyBottom.replace('#', ''), 16)
     )
     graphics.fillRect(startX, 0, endX - startX, height)
+    
+    // Track background section for cleanup
+    this.backgroundSections.push(graphics)
+    this.assetCounter.increment('background', startX)
+    
+    this.cleanupManager.logDebug(`Created background section at x=${startX}, total: ${this.backgroundSections.length}`)
   }
 
   /**
@@ -136,26 +163,34 @@ export class GameScene extends Phaser.Scene {
     if (Math.random() < 0.2) {
       const rockWidth = 15 + Math.random() * 10
       const rockHeight = 8 + Math.random() * 6
-      this.add.ellipse(
+      const rock = this.add.ellipse(
         x + 20 + Math.random() * 60,
         this.groundLevel - rockHeight/2,
         rockWidth,
         rockHeight,
         0x6B6B6B
       )
+      
+      // Track rock for cleanup
+      this.groundDecorations.push(rock)
+      this.assetCounter.increment('rock', x)
     }
     
     // Grass patches (40% chance)
     if (Math.random() < 0.4) {
       for (let g = 0; g < 3 + Math.random() * 3; g++) {
         const grassHeight = 4 + Math.random() * 4
-        this.add.rectangle(
+        const grass = this.add.rectangle(
           x + Math.random() * 100,
           this.groundLevel - grassHeight/2,
           2,
           grassHeight,
           0x4A7C59
         )
+        
+        // Track grass for cleanup
+        this.groundDecorations.push(grass)
+        this.assetCounter.increment('grass', x)
       }
     }
   }
@@ -181,6 +216,10 @@ export class GameScene extends Phaser.Scene {
     // Position properly on ground (anchor to bottom)
     tree.setOrigin(0.5, 1)
     tree.setY(this.groundLevel)
+    
+    // Track tree for cleanup
+    this.groundDecorations.push(tree)
+    this.assetCounter.increment('tree', treeX)
   }
 
   /**
@@ -201,6 +240,10 @@ export class GameScene extends Phaser.Scene {
     // Position properly on ground (anchor to bottom)
     bush.setOrigin(0.5, 1)
     bush.setY(this.groundLevel)
+    
+    // Track bush for cleanup
+    this.groundDecorations.push(bush)
+    this.assetCounter.increment('bush', bushX)
   }
 
   /**
@@ -267,9 +310,8 @@ export class GameScene extends Phaser.Scene {
       this.input.keyboard.on('keydown-SPACE', () => this.handleTap())
       this.input.keyboard.on('keydown-R', () => {
         if (this.gameEnded) {
-          // Set flag to start game directly after reload (skip start screen)
-          localStorage.setItem('startGameDirectly', 'true')
-          window.location.reload() //this was the fix for the glitchy restart. IMP: Don't remove this.
+          // Use proper restart mechanism
+          this.restartGameProperly()
         }
       })
       
@@ -282,9 +324,8 @@ export class GameScene extends Phaser.Scene {
       
       this.input.keyboard.on('keydown-ENTER', () => {
         if (this.gameEnded) {
-          // Set flag to start game directly after reload (skip start screen)
-          localStorage.setItem('startGameDirectly', 'true')
-          window.location.reload() // Restart shortcut
+          // Use proper restart mechanism
+          this.restartGameProperly()
         }
       })
     }
@@ -360,6 +401,9 @@ export class GameScene extends Phaser.Scene {
       
       const ring = new Ring(this, x, y)
       this.rings.add(ring)
+      
+      // Track ring creation
+      this.assetCounter.increment('ring', x)
     }
   }
 
@@ -440,6 +484,9 @@ export class GameScene extends Phaser.Scene {
 
     this.extendWorldIfNeeded()
     this.spawnContentAhead()
+    
+    // STAGE 1: Clean up off-screen assets
+    this.cleanupOffScreenAssets()
     
     // Check for crash
     if ((this.plane.hasCrashed() || this.plane.hasCrashedFromAnySource()) && !this.gameEnded) {
@@ -536,6 +583,7 @@ export class GameScene extends Phaser.Scene {
       if (this.isPositionSafeFromClouds(x, y)) {
         const ring = new Ring(this, x, y)
         this.rings.add(ring)
+        this.assetCounter.increment('ring', x)
       }
     }
   }
@@ -551,6 +599,7 @@ export class GameScene extends Phaser.Scene {
       if (this.isPositionSafeFromClouds(spawnX, y)) {
         const ring = new Ring(this, spawnX, y)
         this.rings.add(ring)
+        this.assetCounter.increment('ring', spawnX)
       }
     }
   }
@@ -570,6 +619,7 @@ export class GameScene extends Phaser.Scene {
       if (this.isPositionSafeFromClouds(x, y)) {
         const ring = new Ring(this, x, y)
         this.rings.add(ring)
+        this.assetCounter.increment('ring', x)
       }
     }
   }
@@ -631,6 +681,141 @@ export class GameScene extends Phaser.Scene {
     
     const cloud = new Cloud(this, x, y)
     this.clouds.add(cloud)
+    this.assetCounter.increment('cloud', x)
+  }
+
+  /**
+   * Clean up off-screen assets to prevent memory leaks and glitching
+   */
+  private cleanupOffScreenAssets(): void {
+    const cameraX = this.cameras.main.scrollX
+    
+    // STAGE 1: Ground decoration cleanup
+    if (this.cleanupManager.shouldCleanupGroundDecorations()) {
+      this.cleanupGroundDecorations(cameraX)
+    }
+    
+    // STAGE 2: Ring and cloud cleanup (implemented later)
+    if (this.cleanupManager.shouldCleanupRings()) {
+      this.cleanupRings(cameraX)
+    }
+    
+    if (this.cleanupManager.shouldCleanupClouds()) {
+      this.cleanupClouds(cameraX)
+    }
+    
+    // STAGE 3: Background cleanup (implemented later)
+    if (this.cleanupManager.shouldCleanupBackground()) {
+      this.cleanupBackgroundSections(cameraX)
+    }
+  }
+  
+  /**
+   * STAGE 1: Clean up ground decorations that are off-screen
+   */
+  private cleanupGroundDecorations(cameraX: number): void {
+    const cleanupDistance = this.cleanupManager.getGroundCleanupDistance()
+    const cleanupThreshold = cameraX - cleanupDistance
+    
+    let cleanedCount = 0
+    
+    // Filter out decorations that are too far behind the camera
+    this.groundDecorations = this.groundDecorations.filter(decoration => {
+      const decorationObj = decoration as any
+      if (decorationObj.x < cleanupThreshold) {
+        // Determine asset type for counter
+        let assetType = 'decoration'
+        if (decorationObj.texture) {
+          const textureKey = decorationObj.texture.key
+          if (textureKey.includes('tree')) assetType = 'tree'
+          else if (textureKey.includes('bush')) assetType = 'bush'
+          else if (decoration instanceof Phaser.GameObjects.Ellipse) assetType = 'rock'
+          else if (decoration instanceof Phaser.GameObjects.Rectangle) assetType = 'grass'
+        }
+        
+        // Destroy the decoration
+        decoration.destroy()
+        this.assetCounter.decrement(assetType)
+        cleanedCount++
+        
+        return false // Remove from array
+      }
+      return true // Keep in array
+    })
+    
+    if (cleanedCount > 0) {
+      this.cleanupManager.logDebug(`Cleaned up ${cleanedCount} ground decorations, remaining: ${this.groundDecorations.length}`)
+    }
+  }
+  
+  /**
+   * STAGE 2: Clean up rings that are off-screen
+   */
+  private cleanupRings(cameraX: number): void {
+    const cleanupDistance = this.cleanupManager.getGameObjectCleanupDistance()
+    const cleanupThreshold = cameraX - cleanupDistance
+    
+    let cleanedCount = 0
+    
+    this.rings.children.entries.forEach(ring => {
+      const ringObj = ring as Ring
+      if (ringObj.x < cleanupThreshold) {
+        ringObj.destroy()
+        this.assetCounter.decrement('ring')
+        cleanedCount++
+      }
+    })
+    
+    if (cleanedCount > 0) {
+      this.cleanupManager.logDebug(`Cleaned up ${cleanedCount} rings, remaining: ${this.rings.children.size}`)
+    }
+  }
+  
+  /**
+   * STAGE 2: Clean up clouds that are off-screen
+   */
+  private cleanupClouds(cameraX: number): void {
+    const cleanupDistance = this.cleanupManager.getGameObjectCleanupDistance()
+    const cleanupThreshold = cameraX - cleanupDistance
+    
+    let cleanedCount = 0
+    
+    this.clouds.children.entries.forEach(cloud => {
+      const cloudObj = cloud as Cloud
+      if (cloudObj.x < cleanupThreshold) {
+        cloudObj.destroy()
+        this.assetCounter.decrement('cloud')
+        cleanedCount++
+      }
+    })
+    
+    if (cleanedCount > 0) {
+      this.cleanupManager.logDebug(`Cleaned up ${cleanedCount} clouds, remaining: ${this.clouds.children.size}`)
+    }
+  }
+  
+  /**
+   * STAGE 3: Clean up background sections that are off-screen
+   */
+  private cleanupBackgroundSections(cameraX: number): void {
+    const cleanupDistance = this.cleanupManager.getBackgroundCleanupDistance()
+    const cleanupThreshold = cameraX - cleanupDistance
+    
+    let cleanedCount = 0
+    
+    this.backgroundSections = this.backgroundSections.filter(section => {
+      if (section.x < cleanupThreshold) {
+        section.destroy()
+        this.assetCounter.decrement('background')
+        cleanedCount++
+        return false
+      }
+      return true
+    })
+    
+    if (cleanedCount > 0) {
+      this.cleanupManager.logDebug(`Cleaned up ${cleanedCount} background sections, remaining: ${this.backgroundSections.length}`)
+    }
   }
 
   /**
@@ -776,7 +961,7 @@ export class GameScene extends Phaser.Scene {
   /**
    * Create authentication-aware UI elements
    */
-  private createAuthAwareUI(width: number, height: number, currentUser: any): void {
+  private createAuthAwareUI(_width: number, _height: number, _currentUser: any): void {
     // UI elements removed - no status message needed on game over screen
   }
   
@@ -912,12 +1097,10 @@ export class GameScene extends Phaser.Scene {
   }
   
   private restartGame(): void {
-    console.log('Restarting game via page reload...')
+    console.log('Restarting game...')
     
-    // Set flag to start game directly after reload (skip start screen)
-    localStorage.setItem('startGameDirectly', 'true')
-    
-    window.location.reload() // Preserve the important restart fix
+    // Use proper restart or fallback to page reload
+    this.restartGameProperly()
   }
   
   /**
@@ -1001,6 +1184,58 @@ export class GameScene extends Phaser.Scene {
       })
       noScoresText.setOrigin(0.5)
       noScoresText.setScrollFactor(0)
+    }
+  }
+  
+  /**
+   * STAGE 4: Proper scene cleanup
+   */
+  public shutdown(): void {
+    if (this.cleanupManager.getConfig().enableSceneCleanup) {
+      this.cleanupManager.logDebug('Performing full scene cleanup')
+      
+      // Stop monitoring
+      this.cleanupManager.stopMonitoring()
+      
+      // Clean up all tracked assets
+      this.groundDecorations.forEach(decoration => {
+        if (decoration && decoration.active) {
+          decoration.destroy()
+        }
+      })
+      this.groundDecorations = []
+      
+      this.backgroundSections.forEach(section => {
+        if (section && section.active) {
+          section.destroy()
+        }
+      })
+      this.backgroundSections = []
+      
+      // Reset counters
+      this.assetCounter.reset()
+      
+      this.cleanupManager.logDebug('Scene cleanup completed')
+    }
+  }
+  
+  /**
+   * STAGE 5: Proper restart without page reload
+   */
+  private restartGameProperly(): void {
+    if (this.cleanupManager.shouldUseProperRestart()) {
+      this.cleanupManager.logDebug('Using proper restart mechanism')
+      
+      // Perform full cleanup first
+      this.shutdown()
+      
+      // Restart the scene
+      this.scene.restart()
+    } else {
+      // Fall back to page reload
+      this.cleanupManager.logDebug('Using page reload restart (fallback)')
+      localStorage.setItem('startGameDirectly', 'true')
+      window.location.reload()
     }
   }
 } 

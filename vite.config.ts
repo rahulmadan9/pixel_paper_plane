@@ -54,7 +54,8 @@ export default defineConfig({
       '@': path.resolve(__dirname, './src'),
       '@scenes': path.resolve(__dirname, './src/scenes'),
       '@objects': path.resolve(__dirname, './src/objects'),
-      '@ui': path.resolve(__dirname, './src/ui')
+      '@ui': path.resolve(__dirname, './src/ui'),
+      '@systems': path.resolve(__dirname, './src/systems')
     }
   },
   build: {
